@@ -419,33 +419,29 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
                                     <tbody>
                                         <tr class="item-row">
                                             <td>
-                                                <select class="form-control part-select" name="part_id[]" required style="width: 100%;">
-                                                    <option value="">Select Part</option>
-                                                    <?php 
-                                                    // Group options by category for better organization
-                                                    $current_category = '';
-                                                    mysqli_data_seek($parts, 0);
-                                                    while($part = mysqli_fetch_assoc($parts)): 
-                                                        $part_category = $part['category_name'] ?? 'Uncategorized';
-                                                        if ($current_category != $part_category) {
-                                                            if ($current_category != '') echo '</optgroup>';
-                                                            echo '<optgroup label="' . htmlspecialchars($part_category) . '">';
-                                                            $current_category = $part_category;
-                                                        }
-                                                    ?>
-                                                        <option value="<?php echo $part['id']; ?>" 
-                                                                data-price="<?php echo $part['unit_price']; ?>"
-                                                                data-stock="<?php echo $part['current_stock']; ?>">
-                                                            <?php 
-                                                            // Show ONLY the part name without part number and stock
-                                                            echo htmlspecialchars($part['part_name']); 
-                                                            ?>
-                                                        </option>
-                                                    <?php 
-                                                    endwhile; 
-                                                    if ($current_category != '') echo '</optgroup>';
-                                                    ?>
-                                                </select>
+                                                <?php
+                                                // Build parts map grouped by category for JS-driven category->part linkage
+                                                mysqli_data_seek($parts, 0);
+                                                $parts_map = [];
+                                                $categories = [];
+                                                while($p = mysqli_fetch_assoc($parts)) {
+                                                    $cat = $p['category_name'] ?? 'Uncategorized';
+                                                    if (!isset($parts_map[$cat])) $parts_map[$cat] = [];
+                                                    $parts_map[$cat][] = $p;
+                                                    if (!in_array($cat, $categories)) $categories[] = $cat;
+                                                }
+                                                ?>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <select class="form-control form-control-sm category-select" style="flex:0 0 45%;">
+                                                        <option value="">Category</option>
+                                                        <?php foreach($categories as $cat): ?>
+                                                            <option value="<?php echo htmlspecialchars($cat); ?>"><?php echo htmlspecialchars($cat); ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                    <select class="form-control form-control-sm part-select" name="part_id[]" required disabled style="flex:1;">
+                                                        <option value="">Part</option>
+                                                    </select>
+                                                </div>
                                             </td>
                                             <td><input type="text" class="form-control available-stock" readonly></td>
                                             <td><input type="number" class="form-control quantity" name="quantity[]" min="1" required></td>
@@ -589,6 +585,8 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
     </div>
 
     <script>
+    // partsByCategory will be populated by PHP below
+    var partsByCategory = {};
     function loadCustomerVehicle() {
         const select = document.getElementById('customer_id');
         const selected = select.options[select.selectedIndex];
@@ -635,6 +633,23 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
             calculateGrandTotal();
             updateDueAmount();
         }
+
+        // Debug: ensure partsByCategory is available and populate category selects
+        console.log('partsByCategory:', partsByCategory);
+        function populateCategorySelects() {
+            const cats = Object.keys(partsByCategory || {});
+            document.querySelectorAll('.category-select').forEach(sel => {
+                // remove existing non-default options
+                for (let i = sel.options.length - 1; i >= 1; i--) sel.remove(i);
+                cats.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    sel.appendChild(opt);
+                });
+            });
+        }
+        populateCategorySelects();
         
         // Calculate grand total from all rows
         function calculateGrandTotal() {
@@ -691,10 +706,15 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
             newRow.querySelectorAll('input').forEach(input => {
                 if (input.type !== 'button') input.value = '';
             });
-            
-            // Reset select
-            const select = newRow.querySelector('select');
-            if (select) select.selectedIndex = 0;
+
+            // Reset selects: category -> default, part -> disabled/empty
+            const categorySelect = newRow.querySelector('.category-select');
+            const partSelect = newRow.querySelector('.part-select');
+            if (categorySelect) categorySelect.selectedIndex = 0;
+            if (partSelect) {
+                partSelect.innerHTML = '<option value="">Select Part</option>';
+                partSelect.disabled = true;
+            }
             
             // Add remove button event
             const removeBtn = newRow.querySelector('.remove-row');
@@ -721,17 +741,42 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
         
         // Handle part selection
         document.addEventListener('change', function(e) {
+            // When category changes, populate the part select for that row
+            if (e.target.classList.contains('category-select')) {
+                const row = e.target.closest('tr');
+                const partSelect = row.querySelector('.part-select');
+                const cat = e.target.value;
+                partSelect.innerHTML = '<option value="">Select Part</option>';
+                partSelect.disabled = true;
+                if (cat && partsByCategory[cat]) {
+                    partsByCategory[cat].forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.part_name;
+                        opt.dataset.price = p.unit_price;
+                        opt.dataset.stock = p.current_stock;
+                        partSelect.appendChild(opt);
+                    });
+                    partSelect.disabled = false;
+                }
+                // clear price/stock for the row
+                row.querySelector('.available-stock').value = '';
+                row.querySelector('.selling-price').value = '';
+                row.querySelector('.row-total').value = '';
+            }
+
+            // When part changes, populate price/stock for that row
             if (e.target.classList.contains('part-select')) {
                 const selected = e.target.options[e.target.selectedIndex];
                 const row = e.target.closest('tr');
-                
-                if (selected.value) {
+
+                if (selected && selected.value) {
                     const price = selected.dataset.price;
                     const stock = selected.dataset.stock;
-                    
+
                     row.querySelector('.selling-price').value = price;
                     row.querySelector('.available-stock').value = stock;
-                    
+
                     // Validate quantity against stock
                     const quantityInput = row.querySelector('.quantity');
                     quantityInput.max = stock;
@@ -828,6 +873,11 @@ $sales = mysqli_query($conn, "SELECT s.*, c.customer_name, c.vehicle_registratio
         // Initialize on page load
         updateCalculations();
     });
+    </script>
+
+    <script>
+    // Populate partsByCategory from PHP-generated map
+    partsByCategory = <?php echo json_encode($parts_map); ?> || {};
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
