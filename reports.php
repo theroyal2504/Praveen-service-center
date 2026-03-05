@@ -11,6 +11,34 @@ $period = $_GET['period'] ?? 'month';
 $start_date = $_GET['start_date'] ?? date('Y-m-d', strtotime('-30 days'));
 $end_date = $_GET['end_date'] ?? date('Y-m-d');
 
+// Set date range based on period
+switch($period) {
+    case 'week':
+        $start_date = date('Y-m-d', strtotime('monday this week'));
+        $end_date = date('Y-m-d', strtotime('sunday this week'));
+        break;
+    case 'month':
+        $start_date = date('Y-m-01');
+        $end_date = date('Y-m-t');
+        break;
+    case 'quarter':
+        $quarter = ceil(date('n') / 3);
+        $start_date = date('Y-') . (($quarter - 1) * 3 + 1) . '-01';
+        $end_date = date('Y-m-t', strtotime($start_date . ' +2 months'));
+        break;
+    case 'year':
+        $start_date = date('Y-01-01');
+        $end_date = date('Y-12-31');
+        break;
+    case 'custom':
+        // Keep as is
+        break;
+    default:
+        // month is default
+        $start_date = date('Y-m-01');
+        $end_date = date('Y-m-t');
+}
+
 // Sales Reports
 if ($report_type == 'sales') {
     // Daily Sales Summary
@@ -26,8 +54,6 @@ if ($report_type == 'sales') {
                                     WHERE sale_date BETWEEN '$start_date' AND '$end_date'
                                     GROUP BY DATE(sale_date)
                                     ORDER BY sale_date DESC");
-
-
 
     // Top Customers
     $top_customers = mysqli_query($conn, "SELECT 
@@ -81,6 +107,16 @@ else if ($report_type == 'purchases') {
                                     GROUP BY p.supplier_id
                                     ORDER BY total_purchased DESC
                                     LIMIT 20");
+
+    // Monthly Purchase Summary
+    $monthly_purchases = mysqli_query($conn, "SELECT 
+                                            DATE_FORMAT(purchase_date, '%Y-%m') as month,
+                                            COUNT(*) as purchase_count,
+                                            SUM(total_amount) as total_purchases
+                                        FROM purchases
+                                        WHERE purchase_date BETWEEN '$start_date' AND '$end_date'
+                                        GROUP BY DATE_FORMAT(purchase_date, '%Y-%m')
+                                        ORDER BY month DESC");
 }
 
 // Stock Reports
@@ -260,12 +296,12 @@ else if ($report_type == 'profit_analysis') {
             <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs">
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $report_type == 'sales' ? 'active' : ''; ?>" href="?report_type=sales&period=<?php echo $period; ?>">
+                        <a class="nav-link <?php echo $report_type == 'sales' ? 'active' : ''; ?>" href="?report_type=sales&period=<?php echo $period; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
                             <i class="bi bi-cash"></i> Sales Reports
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $report_type == 'purchases' ? 'active' : ''; ?>" href="?report_type=purchases&period=<?php echo $period; ?>">
+                        <a class="nav-link <?php echo $report_type == 'purchases' ? 'active' : ''; ?>" href="?report_type=purchases&period=<?php echo $period; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
                             <i class="bi bi-cart"></i> Purchase Reports
                         </a>
                     </li>
@@ -275,17 +311,17 @@ else if ($report_type == 'profit_analysis') {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $report_type == 'performance' ? 'active' : ''; ?>" href="?report_type=performance&period=<?php echo $period; ?>">
+                        <a class="nav-link <?php echo $report_type == 'performance' ? 'active' : ''; ?>" href="?report_type=performance&period=<?php echo $period; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
                             <i class="bi bi-person-workspace"></i> Performance
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $report_type == 'models' ? 'active' : ''; ?>" href="?report_type=models&period=<?php echo $period; ?>">
+                        <a class="nav-link <?php echo $report_type == 'models' ? 'active' : ''; ?>" href="?report_type=models&period=<?php echo $period; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
                             <i class="bi bi-bicycle"></i> Bike Models
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo $report_type == 'profit_analysis' ? 'active' : ''; ?>" href="?report_type=profit_analysis&period=<?php echo $period; ?>">
+                        <a class="nav-link <?php echo $report_type == 'profit_analysis' ? 'active' : ''; ?>" href="?report_type=profit_analysis&period=<?php echo $period; ?>&start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>">
                             <i class="bi bi-pie-chart"></i> Profit Analysis
                         </a>
                     </li>
@@ -375,99 +411,101 @@ else if ($report_type == 'profit_analysis') {
                         </div>
                     </div>
                 </div>
-                                        <!-- Add after daily sales summary -->
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5>Payment Status Summary</h5>
-            </div>
-            <div class="card-body">
-                <?php
-                $payment_status_query = mysqli_query($conn, "SELECT 
-                                                              payment_status,
-                                                              COUNT(*) as count,
-                                                              SUM(total_amount) as total,
-                                                              SUM(paid_amount) as paid,
-                                                              SUM(due_amount) as due
-                                                           FROM sales 
-                                                           WHERE sale_date BETWEEN '$start_date' AND '$end_date'
-                                                           GROUP BY payment_status");
-                ?>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Count</th>
-                            <th>Total Amount</th>
-                            <th>Paid</th>
-                            <th>Due</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while($status = mysqli_fetch_assoc($payment_status_query)): ?>
-                        <tr class="table-<?php 
-                            echo $status['payment_status'] == 'paid' ? 'success' : 
-                                ($status['payment_status'] == 'partial' ? 'warning' : 'danger'); 
-                        ?>">
-                            <td><?php echo ucfirst($status['payment_status']); ?></td>
-                            <td><?php echo $status['count']; ?></td>
-                            <td>₹<?php echo number_format($status['total'], 2); ?></td>
-                            <td>₹<?php echo number_format($status['paid'], 2); ?></td>
-                            <td>₹<?php echo number_format($status['due'], 2); ?></td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5>Outstanding Dues</h5>
-            </div>
-            <div class="card-body">
-                <?php
-                $outstanding_query = mysqli_query($conn, "SELECT 
-                                                           s.invoice_number,
-                                                           c.customer_name,
-                                                           s.sale_date,
-                                                           s.total_amount,
-                                                           s.paid_amount,
-                                                           s.due_amount
-                                                        FROM sales s
-                                                        LEFT JOIN customers c ON s.customer_id = c.id
-                                                        WHERE s.due_amount > 0 
-                                                        AND s.sale_date BETWEEN '$start_date' AND '$end_date'
-                                                        ORDER BY s.due_amount DESC
-                                                        LIMIT 10");
-                ?>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Invoice</th>
-                            <th>Customer</th>
-                            <th>Date</th>
-                            <th>Due Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while($due = mysqli_fetch_assoc($outstanding_query)): ?>
-                        <tr>
-                            <td><?php echo $due['invoice_number']; ?></td>
-                            <td><?php echo $due['customer_name'] ?? 'Walk-in'; ?></td>
-                            <td><?php echo date('d-m-Y', strtotime($due['sale_date'])); ?></td>
-                            <td class="text-danger">₹<?php echo number_format($due['due_amount'], 2); ?></td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+                
+                <!-- Payment Status Summary -->
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Payment Status Summary</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php
+                                $payment_status_query = mysqli_query($conn, "SELECT 
+                                                                              payment_status,
+                                                                              COUNT(*) as count,
+                                                                              SUM(total_amount) as total,
+                                                                              SUM(paid_amount) as paid,
+                                                                              SUM(due_amount) as due
+                                                                           FROM sales 
+                                                                           WHERE sale_date BETWEEN '$start_date' AND '$end_date'
+                                                                           GROUP BY payment_status");
+                                ?>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th>Count</th>
+                                            <th>Total Amount</th>
+                                            <th>Paid</th>
+                                            <th>Due</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php while($status = mysqli_fetch_assoc($payment_status_query)): ?>
+                                        <tr class="table-<?php 
+                                            echo $status['payment_status'] == 'paid' ? 'success' : 
+                                                ($status['payment_status'] == 'partial' ? 'warning' : 'danger'); 
+                                        ?>">
+                                            <td><?php echo ucfirst($status['payment_status']); ?></td>
+                                            <td><?php echo $status['count']; ?></td>
+                                            <td>₹<?php echo number_format($status['total'], 2); ?></td>
+                                            <td>₹<?php echo number_format($status['paid'], 2); ?></td>
+                                            <td>₹<?php echo number_format($status['due'], 2); ?></td>
+                                        </tr>
+                                        <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Outstanding Dues</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php
+                                $outstanding_query = mysqli_query($conn, "SELECT 
+                                                                           s.invoice_number,
+                                                                           c.customer_name,
+                                                                           s.sale_date,
+                                                                           s.total_amount,
+                                                                           s.paid_amount,
+                                                                           s.due_amount
+                                                                        FROM sales s
+                                                                        LEFT JOIN customers c ON s.customer_id = c.id
+                                                                        WHERE s.due_amount > 0 
+                                                                        AND s.sale_date BETWEEN '$start_date' AND '$end_date'
+                                                                        ORDER BY s.due_amount DESC
+                                                                        LIMIT 10");
+                                ?>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Invoice</th>
+                                            <th>Customer</th>
+                                            <th>Date</th>
+                                            <th>Due Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php while($due = mysqli_fetch_assoc($outstanding_query)): ?>
+                                        <tr>
+                                            <td><?php echo $due['invoice_number']; ?></td>
+                                            <td><?php echo $due['customer_name'] ?? 'Walk-in'; ?></td>
+                                            <td><?php echo date('d-m-Y', strtotime($due['sale_date'])); ?></td>
+                                            <td class="text-danger">₹<?php echo number_format($due['due_amount'], 2); ?></td>
+                                        </tr>
+                                        <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="row mt-4">
                     <div class="col-md-6">
                         <h5>Top Customers</h5>
@@ -500,6 +538,175 @@ else if ($report_type == 'profit_analysis') {
                     <div class="col-md-6">
                         <h5>Sales by Hour</h5>
                         <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+
+                <?php elseif ($report_type == 'purchases'): ?>
+                <!-- PURCHASES REPORT SECTION - FIXED AND ADDED -->
+                <div class="row">
+                    <div class="col-12">
+                        <h5>Daily Purchase Summary (<?php echo date('d-m-Y', strtotime($start_date)); ?> to <?php echo date('d-m-Y', strtotime($end_date)); ?>)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Purchase Count</th>
+                                        <th>Total Purchases</th>
+                                        <th>Average Purchase</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $total_purchases_amount = 0;
+                                    $total_purchase_count = 0;
+                                    if(mysqli_num_rows($daily_purchases) > 0):
+                                        while($row = mysqli_fetch_assoc($daily_purchases)): 
+                                            $total_purchases_amount += $row['total_purchases'];
+                                            $total_purchase_count += $row['purchase_count'];
+                                    ?>
+                                    <tr>
+                                        <td><?php echo date('d-m-Y', strtotime($row['date'])); ?></td>
+                                        <td><?php echo $row['purchase_count']; ?></td>
+                                        <td>₹<?php echo number_format($row['total_purchases'], 2); ?></td>
+                                        <td>₹<?php echo number_format($row['avg_purchase'], 2); ?></td>
+                                    </tr>
+                                    <?php 
+                                        endwhile; 
+                                    else:
+                                    ?>
+                                    <tr>
+                                        <td colspan="4" class="text-center">No purchase data found for the selected period</td>
+                                    </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                                <tfoot class="table-info">
+                                    <tr>
+                                        <th>Totals</th>
+                                        <th><?php echo $total_purchase_count; ?></th>
+                                        <th>₹<?php echo number_format($total_purchases_amount, 2); ?></th>
+                                        <th>₹<?php echo number_format($total_purchase_count > 0 ? $total_purchases_amount / $total_purchase_count : 0, 2); ?></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monthly Purchase Summary -->
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Monthly Purchase Summary</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Month</th>
+                                                <th>Purchase Count</th>
+                                                <th>Total Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            if(mysqli_num_rows($monthly_purchases) > 0):
+                                                while($row = mysqli_fetch_assoc($monthly_purchases)): 
+                                            ?>
+                                            <tr>
+                                                <td><?php echo $row['month']; ?></td>
+                                                <td><?php echo $row['purchase_count']; ?></td>
+                                                <td>₹<?php echo number_format($row['total_purchases'], 2); ?></td>
+                                            </tr>
+                                            <?php 
+                                                endwhile; 
+                                            else:
+                                            ?>
+                                            <tr>
+                                                <td colspan="3" class="text-center">No monthly data found</td>
+                                            </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Suppliers -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Top Suppliers</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Supplier</th>
+                                                <th>Contact</th>
+                                                <th>Purchases</th>
+                                                <th>Total Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            if(mysqli_num_rows($top_suppliers) > 0):
+                                                while($row = mysqli_fetch_assoc($top_suppliers)): 
+                                            ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($row['supplier_name']); ?></td>
+                                                <td><?php echo htmlspecialchars($row['contact_person'] ?? 'N/A'); ?><br><small><?php echo htmlspecialchars($row['phone'] ?? ''); ?></small></td>
+                                                <td><?php echo $row['purchase_count']; ?></td>
+                                                <td>₹<?php echo number_format($row['total_purchased'], 2); ?></td>
+                                            </tr>
+                                            <?php 
+                                                endwhile; 
+                                            else:
+                                            ?>
+                                            <tr>
+                                                <td colspan="4" class="text-center">No supplier data found</td>
+                                            </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Purchase Summary Cards -->
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h6>Total Purchases</h6>
+                                <h3><?php echo $total_purchase_count; ?></h3>
+                                <small>Transactions</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h6>Total Amount</h6>
+                                <h3>₹<?php echo number_format($total_purchases_amount, 2); ?></h3>
+                                <small>Purchase Value</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h6>Average Purchase</h6>
+                                <h3>₹<?php echo number_format($total_purchase_count > 0 ? $total_purchases_amount / $total_purchase_count : 0, 2); ?></h3>
+                                <small>Per Transaction</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
