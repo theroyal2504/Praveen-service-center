@@ -45,12 +45,73 @@ $dues = mysqli_fetch_assoc($dues_query);
     <title>Dashboard - Bike Management System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        /* Statistics Cards (larger) */
+        .row > .col-md-3 { padding-bottom: 8px; }
+        .row > .col-md-3 .card .card-body { padding: 10px; }
+        .row > .col-md-3 .card .card-body h6 { font-size: 14px; margin-bottom: 4px; }
+        .row > .col-md-3 .card .card-body h2 { font-size: 22px; margin-bottom: 4px; }
+        .row > .col-md-3 .card .card-body small { font-size: 12px; display:block; margin-top:0; }
+        .row > .col-md-3 i.bi { font-size: 28px; }
+
+        /* Reduce gap between Statistics Cards and Today's Performance */
+        .statistics-cards { margin-bottom: 6px; }
+        .statistics-cards .col-md-3 { margin-bottom: 6px; }
+        .row.mt-2 { margin-top: 6px; }
+
+        /* Master Entries styling */
+        .master-entries .card { border-radius: 10px; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .master-entries .card:hover { transform: translateY(-6px); box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
+        .master-entries .card .card-body { padding: 18px 12px; }
+        .master-entries .card .card-body i.bi { font-size: 48px; opacity: .98; }
+        .master-entries .card .card-body h5 { font-size: 18px; margin-top: 8px; margin-bottom: 6px; font-weight: 700; }
+        .master-entries .card .card-body p { font-size: 14px; margin-bottom: 8px; color: #6c757d; }
+        .master-entries .card .btn { border-radius: 20px; padding: .35rem .8rem; font-size: 14px; }
+        .master-entries .card .text-muted.small { font-size: 13px; }
+        @media (max-width: 1200px) { .master-entries .card .card-body i.bi { font-size: 42px; } }
+        @media (max-width: 768px) { .master-entries .card .card-body i.bi { font-size: 36px; } }
+        @media (max-width: 576px) { .master-entries .card .card-body i.bi { font-size: 30px; } }
+
+        /* Staff Operations styling - modern, compact cards */
+        .staff-ops .card { border-radius: 12px; overflow: hidden; transition: transform .14s ease, box-shadow .14s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .staff-ops .card:hover { transform: translateY(-6px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+        .staff-ops .card .card-body { padding: 14px 10px; }
+        .staff-ops .card .card-body i.bi { font-size: 30px; margin-bottom: 6px; color: inherit; }
+        .staff-ops .card .card-body h6 { font-size: 14px; margin-bottom: 4px; font-weight: 600; }
+        .staff-ops .card .card-body small { font-size: 12px; color: #6c757d; }
+        .staff-ops .card.bg-light { background: linear-gradient(180deg,#ffffff,#fbfbfb); }
+        .staff-ops .card .btn { font-size: 13px; border-radius: 18px; padding: .3rem .6rem; }
+        .staff-ops .col-md-2 { padding-bottom: 10px; }
+        @media (max-width: 768px) { .staff-ops .card .card-body i.bi { font-size: 26px; } }
+
+        /* Today's Performance & Dues (larger) */
+        .row.mt-2 .card .card-body { padding: 10px; }
+        .row.mt-2 .card .card-body h6 { font-size: 14px; margin-bottom: 4px; }
+        .row.mt-2 .card .card-body h2 { font-size: 20px; margin-bottom: 4px; }
+        .row.mt-2 .card .card-body small { font-size: 12px; display:block; margin-top:0; }
+        .row.mt-2 i.bi { font-size: 30px; }
+        /* tighter card spacing */
+        .row.mt-2 .col-md-6 { padding-bottom: 8px; }
+
+        @media (max-width: 992px) {
+            .row > .col-md-3 .card .card-body h2 { font-size: 20px; }
+            .row > .col-md-3 i.bi { font-size: 24px; }
+            .row.mt-2 .card .card-body h2 { font-size: 18px; }
+            .row.mt-2 i.bi { font-size: 24px; }
+        }
+        @media (max-width: 576px) {
+            .row.mt-2 .card .card-body h2 { font-size: 16px; }
+            .row.mt-2 i.bi { font-size: 20px; }
+            .row > .col-md-3 .card .card-body h2 { font-size: 16px; }
+            .row > .col-md-3 i.bi { font-size: 20px; }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="dashboard.php">
-                <i class="bi bi-bicycle"></i> Bike Management System
+                <i class="bi bi-bicycle"></i> PRAVEEN SERVICE CENTER
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -84,7 +145,7 @@ $dues = mysqli_fetch_assoc($dues_query);
         </div>
 
         <!-- Statistics Cards -->
-        <div class="row">
+        <div class="row statistics-cards">
             <div class="col-md-3 mb-3">
                 <div class="card text-white bg-primary">
                     <div class="card-body">
@@ -181,6 +242,7 @@ $dues = mysqli_fetch_assoc($dues_query);
 
         <!-- Master Entries Section - Only visible to Admin -->
         <?php if (isAdmin()): ?>
+        <div class="master-entries">
         <div class="row mt-4">
             <div class="col-12">
                 <h4 class="mb-3 border-bottom pb-2">
@@ -292,10 +354,11 @@ $dues = mysqli_fetch_assoc($dues_query);
                 </div>
             </div>
         </div>
+        </div>
         <?php endif; ?>
 
         <!-- Staff Operations - Visible to both Admin and Staff -->
-        <div class="row mt-4">
+        <div class="row mt-4 staff-ops">
             <div class="col-12">
                 <h4 class="mb-3 border-bottom pb-2">
                     <i class="bi bi-tools"></i> Staff Operations

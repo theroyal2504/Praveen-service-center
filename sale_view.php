@@ -127,7 +127,7 @@ $payment_summary = mysqli_fetch_assoc(mysqli_query($conn, "SELECT
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="dashboard.php">
-                <i class="bi bi-bicycle"></i> Bike Management System
+                <i class="bi bi-bicycle"></i> PRAVEEN SERVICE CENTER
             </a>
         </div>
     </nav>
