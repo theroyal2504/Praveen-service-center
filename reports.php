@@ -258,7 +258,7 @@ else if ($report_type == 'profit_analysis') {
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="dashboard.php">
-                <i class="bi bi-bicycle"></i> Bike Management System
+                <i class="bi bi-bicycle"></i> PRAVEEN SERVICE CENTER
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -542,7 +542,7 @@ else if ($report_type == 'profit_analysis') {
                 </div>
 
                 <?php elseif ($report_type == 'purchases'): ?>
-                <!-- PURCHASES REPORT SECTION - FIXED AND ADDED -->
+                <!-- PURCHASES REPORT SECTION -->
                 <div class="row">
                     <div class="col-12">
                         <h5>Daily Purchase Summary (<?php echo date('d-m-Y', strtotime($start_date)); ?> to <?php echo date('d-m-Y', strtotime($end_date)); ?>)</h5>
@@ -848,6 +848,153 @@ else if ($report_type == 'profit_analysis') {
                     <div class="col-12">
                         <h5>Monthly Trends (Last 12 Months)</h5>
                         <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+
+                <?php elseif ($report_type == 'models'): ?>
+                <!-- BIKE MODELS REPORT SECTION - FIXED AND ADDED -->
+                <div class="row">
+                    <div class="col-12">
+                        <h5>Most Serviced Bike Models (<?php echo date('d-m-Y', strtotime($start_date)); ?> to <?php echo date('d-m-Y', strtotime($end_date)); ?>)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Company</th>
+                                        <th>Model Name</th>
+                                        <th>Service Count</th>
+                                        <th>Total Estimated (₹)</th>
+                                        <th>Average per Service</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $sl_no = 1;
+                                    $total_services = 0;
+                                    $total_estimated_all = 0;
+                                    if(mysqli_num_rows($model_service) > 0):
+                                        while($row = mysqli_fetch_assoc($model_service)): 
+                                            $total_services += $row['service_count'];
+                                            $total_estimated_all += $row['total_estimated'];
+                                            $avg_service = $row['service_count'] > 0 ? $row['total_estimated'] / $row['service_count'] : 0;
+                                    ?>
+                                    <tr>
+                                        <td><?php echo $sl_no++; ?></td>
+                                        <td><?php echo htmlspecialchars($row['company_name']); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($row['model_name']); ?></strong></td>
+                                        <td class="text-center"><span class="badge bg-primary"><?php echo $row['service_count']; ?></span></td>
+                                        <td>₹<?php echo number_format($row['total_estimated'], 2); ?></td>
+                                        <td>₹<?php echo number_format($avg_service, 2); ?></td>
+                                    </tr>
+                                    <?php 
+                                        endwhile; 
+                                    else:
+                                    ?>
+                                    <tr>
+                                        <td colspan="6" class="text-center">No service data found for the selected period</td>
+                                    </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                                <tfoot class="table-info">
+                                    <tr>
+                                        <th colspan="3" class="text-end">Totals:</th>
+                                        <th><?php echo $total_services; ?></th>
+                                        <th>₹<?php echo number_format($total_estimated_all, 2); ?></th>
+                                        <th>₹<?php echo number_format($total_services > 0 ? $total_estimated_all / $total_services : 0, 2); ?></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parts by Model -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h5>Parts Stock by Model</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Company</th>
+                                        <th>Model Name</th>
+                                        <th>Parts Count</th>
+                                        <th>Total Quantity</th>
+                                        <th>Stock Value (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $sl_no = 1;
+                                    $total_parts_all = 0;
+                                    $total_qty_all = 0;
+                                    $total_value_all = 0;
+                                    if(mysqli_num_rows($parts_by_model) > 0):
+                                        while($row = mysqli_fetch_assoc($parts_by_model)): 
+                                            $total_parts_all += $row['parts_count'];
+                                            $total_qty_all += $row['stock_quantity'];
+                                            $total_value_all += $row['stock_value'];
+                                    ?>
+                                    <tr>
+                                        <td><?php echo $sl_no++; ?></td>
+                                        <td><?php echo htmlspecialchars($row['company_name']); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($row['model_name']); ?></strong></td>
+                                        <td class="text-center"><?php echo $row['parts_count']; ?></td>
+                                        <td class="text-center"><?php echo $row['stock_quantity']; ?></td>
+                                        <td>₹<?php echo number_format($row['stock_value'], 2); ?></td>
+                                    </tr>
+                                    <?php 
+                                        endwhile; 
+                                    else:
+                                    ?>
+                                    <tr>
+                                        <td colspan="6" class="text-center">No parts data found</td>
+                                    </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                                <tfoot class="table-info">
+                                    <tr>
+                                        <th colspan="3" class="text-end">Totals:</th>
+                                        <th><?php echo $total_parts_all; ?></th>
+                                        <th><?php echo $total_qty_all; ?></th>
+                                        <th>₹<?php echo number_format($total_value_all, 2); ?></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards for Models -->
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h6>Total Models Serviced</h6>
+                                <h3><?php echo mysqli_num_rows($model_service); ?></h3>
+                                <small>Unique Models</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h6>Total Service Jobs</h6>
+                                <h3><?php echo $total_services; ?></h3>
+                                <small>Service Count</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h6>Avg Service Value</h6>
+                                <h3>₹<?php echo number_format($total_services > 0 ? $total_estimated_all / $total_services : 0, 2); ?></h3>
+                                <small>Per Service</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

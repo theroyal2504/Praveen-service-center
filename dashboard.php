@@ -353,6 +353,20 @@ $dues = mysqli_fetch_assoc($dues_query);
                     </div>
                 </div>
             </div>
+            <!-- Add this in the admin section after other entries -->
+<div class="col-md-3 mb-3">
+    <div class="card h-100 border-success">
+        <div class="card-body text-center">
+            <i class="bi bi-calculator fs-1 text-success"></i>
+            <h5 class="card-title mt-2">Simple Accounting</h5>
+            <p class="card-text text-muted small">Track income, expenses & balance</p>
+            <a href="simple_accounting.php" class="btn btn-outline-success btn-sm w-100">View Accounting</a>
+            <small class="text-muted d-block mt-2">Today's income & total balance</small>
+        </div>
+    </div>
+</div>
+
+            
         </div>
         </div>
         <?php endif; ?>

@@ -118,6 +118,19 @@ $top_purchased_query = "SELECT
                         LIMIT 10";
 $top_purchased_result = mysqli_query($conn, $top_purchased_query);
 
+// Auto-calculate from daily_transactions
+$accounting_income = mysqli_fetch_assoc(mysqli_query($conn, 
+    "SELECT SUM(amount) as total FROM daily_transactions 
+     WHERE type = 'income' AND transaction_date BETWEEN '$start_date' AND '$end_date'"))['total'] ?? 0;
+     
+$accounting_expense = mysqli_fetch_assoc(mysqli_query($conn, 
+    "SELECT SUM(amount) as total FROM daily_transactions 
+     WHERE type = 'expense' AND transaction_date BETWEEN '$start_date' AND '$end_date'"))['total'] ?? 0;
+
+// Add to existing totals
+$total_revenue += $accounting_income;
+$total_cost += $accounting_expense;
+
 // Get Category-wise Profit
 $category_profit_query = "SELECT 
                             c.category_name,
