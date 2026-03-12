@@ -110,7 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
             paid_amount, 
             discount_type,
             discount_value,
-            created_by
+            created_by,
+            vehicle_registration
         ) VALUES (
             $customer_id, 
             '$sale_date', 
@@ -119,7 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
             $paid_amount, 
             '$discount_type',
             $discount_value,
-            $created_by
+            $created_by,
+            '$vehicle_registration'
         )";
         mysqli_query($conn, $query);
         $sale_id = mysqli_insert_id($conn);
@@ -268,7 +270,7 @@ $customers = mysqli_query($conn, "SELECT c.*, bm.model_name, bc.name as company_
 // Fetch recent sales with vehicle info - Use grand_total for display
 $sales = mysqli_query($conn, "SELECT s.*, 
                               c.customer_name, 
-                              c.vehicle_registration, 
+                              c.vehicle_registration as customer_vehicle, 
                               u.username,
                               COALESCE(s.grand_total, s.total_amount) as display_total,
                               (SELECT COUNT(*) FROM sale_payments WHERE sale_id = s.id) as payment_count
@@ -392,6 +394,32 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             background-color: #dc3545;
             color: white;
         }
+        .required-field {
+            border-left: 3px solid #dc3545 !important;
+        }
+        .text-danger-small {
+            color: #dc3545;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .mandatory-badge {
+            background-color: #dc3545;
+            color: white;
+            font-size: 0.7em;
+            padding: 2px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        input:invalid {
+            border-color: #dc3545;
+        }
+        .vehicle-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 5px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -484,7 +512,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             <div class="col-12">
                 <div class="card">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="bi bi-cart-plus"></i> New Sale / Billing</h5>
+                        <h5 class="mb-0"><i class="bi bi-cart-plus"></i> New Sale / Billing <span class="mandatory-badge">Vehicle Number Mandatory</span></h5>
                         <div>
                             <button type="button" class="btn btn-warning btn-sm" id="checkStockBtn">
                                 <i class="bi bi-exclamation-triangle"></i> Check Stock Availability
@@ -536,10 +564,17 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                                         </div>
                                                         <div class="col-md-4">
                                                             <div class="mb-2">
-                                                                <label for="existing_vehicle" class="form-label">Vehicle Registration</label>
-                                                                <input type="text" class="form-control form-control-sm" id="existing_vehicle" name="vehicle_registration" 
-                                                                       placeholder="Enter manually if different" style="text-transform:uppercase">
-                                                                <small class="text-muted">Auto-fills from selected customer</small>
+                                                                <label for="existing_vehicle" class="form-label">
+                                                                    Vehicle Registration <span class="text-danger">*</span>
+                                                                    <span class="mandatory-badge">Required</span>
+                                                                </label>
+                                                                <input type="text" class="form-control form-control-sm required-field" 
+                                                                       id="existing_vehicle" name="vehicle_registration" 
+                                                                       placeholder="Enter vehicle number (e.g., MH12AB1234)" 
+                                                                       style="text-transform:uppercase" required>
+                                                                <small class="text-danger-small">
+                                                                    <i class="bi bi-exclamation-circle"></i> Vehicle number is MANDATORY for all sales
+                                                                </small>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -554,20 +589,25 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                                         <div class="col-md-4">
                                                             <div class="mb-2">
                                                                 <label for="new_customer_name" class="form-label">Customer Name *</label>
-                                                                <input type="text" class="form-control form-control-sm" id="new_customer_name" name="new_customer_name">
+                                                                <input type="text" class="form-control form-control-sm" id="new_customer_name" name="new_customer_name" required>
                                                             </div>
                                                         </div>
                                                         <div class="col-md-3">
                                                             <div class="mb-2">
                                                                 <label for="new_customer_phone" class="form-label">Phone Number *</label>
-                                                                <input type="text" class="form-control form-control-sm" id="new_customer_phone" name="new_customer_phone">
+                                                                <input type="text" class="form-control form-control-sm" id="new_customer_phone" name="new_customer_phone" required>
                                                             </div>
                                                         </div>
                                                         <div class="col-md-3">
                                                             <div class="mb-2">
-                                                                <label for="new_vehicle_registration" class="form-label">Vehicle Registration</label>
-                                                                <input type="text" class="form-control form-control-sm" id="new_vehicle_registration" name="new_vehicle_registration" 
-                                                                       placeholder="e.g., MH12AB1234" style="text-transform:uppercase">
+                                                                <label for="new_vehicle_registration" class="form-label">
+                                                                    Vehicle Registration <span class="text-danger">*</span>
+                                                                    <span class="mandatory-badge">Required</span>
+                                                                </label>
+                                                                <input type="text" class="form-control form-control-sm required-field" 
+                                                                       id="new_vehicle_registration" name="new_vehicle_registration" 
+                                                                       placeholder="e.g., MH12AB1234" style="text-transform:uppercase" required>
+                                                                <small class="text-danger-small">Vehicle number is mandatory</small>
                                                             </div>
                                                         </div>
                                                         <div class="col-md-2">
@@ -668,6 +708,11 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                 <i class="bi bi-exclamation-triangle"></i> <span id="stockWarningMessage"></span>
                             </div>
                             
+                            <!-- Vehicle Warning Area -->
+                            <div id="vehicleWarning" class="alert alert-danger" style="display: none;">
+                                <i class="bi bi-exclamation-triangle-fill"></i> <span id="vehicleWarningMessage">Vehicle number is mandatory! Please enter vehicle registration number.</span>
+                            </div>
+                            
                             <!-- Calculation Section with Discount -->
                             <div class="row calculation-row">
                                 <div class="col-md-6">
@@ -748,120 +793,126 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             </div>
         </div>
 
-        <!-- Recent Sales Section - CORRECTED -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sales</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Invoice #</th>
-                                        <th>Customer</th>
-                                        <th>Vehicle</th>
-                                        <th>Sub Total</th>
-                                        <th>Discount</th>
-                                        <th>Grand Total</th>
-                                        <th>Paid</th>
-                                        <th>Due</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+<!-- Recent Sales Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sales</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Date</th>
+                                <th>Invoice #</th>
+                                <th>Customer</th>
+                                <th>Vehicle</th>
+                                <th>Sub Total</th>
+                                <th>Discount</th>
+                                <th>Grand Total</th>
+                                <th>Paid</th>
+                                <th>Due</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            // Reset the sales pointer
+                            mysqli_data_seek($sales, 0);
+                            while($sale = mysqli_fetch_assoc($sales)): 
+                                // Get subtotal from sale items
+                                $subtotal_query = mysqli_query($conn, "SELECT SUM(quantity * selling_price) as subtotal 
+                                                                      FROM sale_items WHERE sale_id = " . $sale['id']);
+                                $subtotal_data = mysqli_fetch_assoc($subtotal_query);
+                                $subtotal = $subtotal_data['subtotal'] ?? $sale['total_amount'];
+                                
+                                // Get discount amount from sales table
+                                $discount_amount = $sale['discount_amount'] ?? 0;
+                                
+                                // IMPORTANT: Use display_total which already has discount applied
+                                $grand_total = $sale['display_total'];
+                                
+                                // Calculate due amount based on discounted grand total
+                                $due_amount = $grand_total - $sale['paid_amount'];
+                                
+                                // Ensure due amount is not negative
+                                if ($due_amount < 0) {
+                                    $due_amount = 0;
+                                }
+                                
+                                // Get vehicle registration - check both possible sources
+                                $vehicle_number = '';
+                                if (isset($sale['vehicle_registration']) && !empty($sale['vehicle_registration'])) {
+                                    $vehicle_number = $sale['vehicle_registration'];
+                                } elseif (isset($sale['customer_vehicle']) && !empty($sale['customer_vehicle'])) {
+                                    $vehicle_number = $sale['customer_vehicle'];
+                                }
+                            ?>
+                            <tr>
+                                <td><?php echo date('d-m-Y', strtotime($sale['sale_date'])); ?></td>
+                                <td><strong><?php echo htmlspecialchars($sale['invoice_number']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($sale['customer_name'] ?? 'Walk-in'); ?></td>
+                                <td>
+                                    <?php if(!empty($vehicle_number)): ?>
+                                        <span class="badge bg-info"><?php echo htmlspecialchars($vehicle_number); ?></span>
+                                    <?php else: ?>
+                                        <span class="badge bg-warning text-dark">Not Specified</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-secondary">₹<?php echo number_format($subtotal, 2); ?></td>
+                                <td class="text-info">
+                                    <?php if($discount_amount > 0): ?>
+                                        -₹<?php echo number_format($discount_amount, 2); ?>
+                                        <?php if(isset($sale['discount_type']) && $sale['discount_type'] == 'percentage'): ?>
+                                            <br><small>(<?php echo $sale['discount_value']; ?>%)</small>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-primary"><strong>₹<?php echo number_format($grand_total, 2); ?></strong></td>
+                                <td class="text-success">₹<?php echo number_format($sale['paid_amount'], 2); ?></td>
+                                <td class="text-<?php echo $due_amount > 0 ? 'danger' : 'success'; ?>">
+                                    <strong>₹<?php echo number_format($due_amount, 2); ?></strong>
+                                </td>
+                                <td>
                                     <?php 
-                                    // Reset the sales pointer
-                                    mysqli_data_seek($sales, 0);
-                                    while($sale = mysqli_fetch_assoc($sales)): 
-                                        // Get subtotal from sale items
-                                        $subtotal_query = mysqli_query($conn, "SELECT SUM(quantity * selling_price) as subtotal 
-                                                                              FROM sale_items WHERE sale_id = " . $sale['id']);
-                                        $subtotal_data = mysqli_fetch_assoc($subtotal_query);
-                                        $subtotal = $subtotal_data['subtotal'] ?? $sale['total_amount'];
-                                        
-                                        // Get discount amount from sales table
-                                        $discount_amount = $sale['discount_amount'] ?? 0;
-                                        
-                                        // IMPORTANT: Use display_total which already has discount applied
-                                        $grand_total = $sale['display_total'];
-                                        
-                                        // Calculate due amount based on discounted grand total
-                                        $due_amount = $grand_total - $sale['paid_amount'];
-                                        
-                                        // Ensure due amount is not negative
-                                        if ($due_amount < 0) {
-                                            $due_amount = 0;
-                                        }
+                                    $status_class = 'paid';
+                                    $status_text = 'Paid';
+                                    if($due_amount > 0 && $sale['paid_amount'] > 0) {
+                                        $status_class = 'partial';
+                                        $status_text = 'Partial';
+                                    } elseif($due_amount == $grand_total && $grand_total > 0) {
+                                        $status_class = 'pending';
+                                        $status_text = 'Pending';
+                                    }
                                     ?>
-                                    <tr>
-                                        <td><?php echo date('d-m-Y', strtotime($sale['sale_date'])); ?></td>
-                                        <td><strong><?php echo htmlspecialchars($sale['invoice_number']); ?></strong></td>
-                                        <td><?php echo htmlspecialchars($sale['customer_name'] ?? 'Walk-in'); ?></td>
-                                        <td>
-                                            <?php if($sale['vehicle_registration']): ?>
-                                                <span class="badge bg-info"><?php echo $sale['vehicle_registration']; ?></span>
-                                            <?php else: ?>
-                                                -
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="text-secondary">₹<?php echo number_format($subtotal, 2); ?></td>
-                                        <td class="text-info">
-                                            <?php if($discount_amount > 0): ?>
-                                                -₹<?php echo number_format($discount_amount, 2); ?>
-                                                <?php if(isset($sale['discount_type']) && $sale['discount_type'] == 'percentage'): ?>
-                                                    <br><small>(<?php echo $sale['discount_value']; ?>%)</small>
-                                                <?php endif; ?>
-                                            <?php else: ?>
-                                                -
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="text-primary"><strong>₹<?php echo number_format($grand_total, 2); ?></strong></td>
-                                        <td class="text-success">₹<?php echo number_format($sale['paid_amount'], 2); ?></td>
-                                        <td class="text-<?php echo $due_amount > 0 ? 'danger' : 'success'; ?>">
-                                            <strong>₹<?php echo number_format($due_amount, 2); ?></strong>
-                                        </td>
-                                        <td>
-                                            <?php 
-                                            $status_class = 'paid';
-                                            $status_text = 'Paid';
-                                            if($due_amount > 0 && $sale['paid_amount'] > 0) {
-                                                $status_class = 'partial';
-                                                $status_text = 'Partial';
-                                            } elseif($due_amount == $grand_total && $grand_total > 0) {
-                                                $status_class = 'pending';
-                                                $status_text = 'Pending';
-                                            }
-                                            ?>
-                                            <span class="status-badge status-<?php echo $status_class; ?>">
-                                                <?php echo $status_text; ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="sale_view.php?id=<?php echo $sale['id']; ?>" class="btn btn-info" title="View">
-                                                    <i class="bi bi-eye"></i>
-                                                </a>
-                                                <a href="invoice.php?id=<?php echo $sale['id']; ?>" class="btn btn-secondary" target="_blank" title="Print">
-                                                    <i class="bi bi-printer"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php endwhile; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                                    <span class="status-badge status-<?php echo $status_class; ?>">
+                                        <?php echo $status_text; ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="sale_view.php?id=<?php echo $sale['id']; ?>" class="btn btn-info" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="invoice.php?id=<?php echo $sale['id']; ?>" class="btn btn-secondary" target="_blank" title="Print">
+                                            <i class="bi bi-printer"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
-
+</div>
     <script>
     // Parts data
     var partsByCategory = <?php echo json_encode($parts_map); ?> || {};
@@ -884,9 +935,14 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             vehicleInput.value = '';
             vehicleInfo.style.display = 'none';
         } else {
+            // Walk-in customer selected - clear vehicle but still require it
             vehicleInput.value = '';
             vehicleInfo.style.display = 'none';
         }
+        
+        // Make vehicle input required for all cases
+        vehicleInput.required = true;
+        vehicleInput.setCustomValidity('');
         
         if (selected.value) {
             document.getElementById('new_customer_name').value = selected.dataset.name || '';
@@ -915,6 +971,26 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             warningDiv.style.display = 'block';
         } else {
             warningDiv.style.display = 'none';
+        }
+    }
+
+    function checkVehicleNumber() {
+        const activeTab = document.querySelector('.tab-pane.active');
+        const vehicleWarning = document.getElementById('vehicleWarning');
+        let vehicleNumber = '';
+        
+        if (activeTab.id === 'existing-customer') {
+            vehicleNumber = document.getElementById('existing_vehicle').value.trim();
+        } else {
+            vehicleNumber = document.getElementById('new_vehicle_registration').value.trim();
+        }
+        
+        if (!vehicleNumber) {
+            vehicleWarning.style.display = 'block';
+            return false;
+        } else {
+            vehicleWarning.style.display = 'none';
+            return true;
         }
     }
 
@@ -1131,6 +1207,9 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             
             // Check stock availability
             checkStockAvailability();
+            
+            // Check vehicle number
+            checkVehicleNumber();
         }
 
         // Event listeners for discount
@@ -1238,19 +1317,74 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                 calculateAll();
             }
         });
+
+        // Check vehicle number on input
+        document.getElementById('existing_vehicle').addEventListener('input', checkVehicleNumber);
+        document.getElementById('new_vehicle_registration').addEventListener('input', checkVehicleNumber);
+        
+        // Handle tab switching
+        const tabs = document.querySelectorAll('a[data-bs-toggle="tab"]');
+        tabs.forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function(e) {
+                // Update required attributes based on active tab
+                const existingVehicle = document.getElementById('existing_vehicle');
+                const newVehicle = document.getElementById('new_vehicle_registration');
+                
+                if (e.target.id === 'existing-customer-tab') {
+                    existingVehicle.required = true;
+                    newVehicle.required = false;
+                    newVehicle.value = ''; // Clear new vehicle when switching
+                } else {
+                    existingVehicle.required = false;
+                    newVehicle.required = true;
+                    existingVehicle.value = ''; // Clear existing vehicle when switching
+                }
+                checkVehicleNumber();
+            });
+        });
         
         // Form validation
         document.getElementById('saleForm').addEventListener('submit', function(e) {
             // Check if this is a draft save or complete sale
             const isDraftSave = e.submitter && e.submitter.name === 'save_draft';
             
+            // ALWAYS check vehicle registration for both draft and complete sale
+            const activeTab = document.querySelector('.tab-pane.active');
+            let vehicleNumber = '';
+            
+            if (activeTab.id === 'existing-customer') {
+                vehicleNumber = document.getElementById('existing_vehicle').value.trim();
+            } else {
+                vehicleNumber = document.getElementById('new_vehicle_registration').value.trim();
+            }
+            
+            if (!vehicleNumber) {
+                e.preventDefault();
+                alert('⚠️ VEHICLE NUMBER IS MANDATORY!\n\nPlease enter the vehicle registration number for this sale.');
+                
+                // Focus on the appropriate vehicle input
+                if (activeTab.id === 'existing-customer') {
+                    document.getElementById('existing_vehicle').focus();
+                } else {
+                    document.getElementById('new_vehicle_registration').focus();
+                }
+                return false;
+            }
+            
+            // Validate vehicle number format (at least 5 characters)
+            if (vehicleNumber.length < 5) {
+                e.preventDefault();
+                alert('Please enter a valid vehicle registration number (minimum 5 characters)');
+                return false;
+            }
+            
             if (!isDraftSave) {
                 // Validate for complete sale
                 const newCustomerChecked = document.getElementById('new_customer').checked;
                 
                 if (newCustomerChecked) {
-                    const name = document.getElementById('new_customer_name').value;
-                    const phone = document.getElementById('new_customer_phone').value;
+                    const name = document.getElementById('new_customer_name').value.trim();
+                    const phone = document.getElementById('new_customer_phone').value.trim();
                     
                     if (!name || !phone) {
                         e.preventDefault();
@@ -1301,7 +1435,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                     }
                 }
             } else {
-                // For draft save, just ensure there's at least one item
+                // For draft save, ensure there's at least one item
                 const quantities = document.querySelectorAll('.quantity');
                 let hasItems = false;
                 quantities.forEach(q => {

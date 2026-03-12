@@ -305,11 +305,11 @@ foreach ($all_parts as $part_id => $part) {
         .price-matrix {
             overflow-x: auto;
             background: white;
-            border-radius: 8px;
+            border-radius: 5px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         .price-matrix table {
-            min-width: 100%;
+            min-width: 50%;
             border-collapse: collapse;
         }
         .price-matrix th {
@@ -363,9 +363,9 @@ foreach ($all_parts as $part_id => $part) {
         }
         .stats-mini-card {
             background: white;
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
+            border-radius: 1px;
+            padding: 5px;
+            margin-bottom: 0px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
         .variation-indicator {
@@ -386,9 +386,9 @@ foreach ($all_parts as $part_id => $part) {
         }
         .filter-section {
             background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
+            padding: 1px;
+            border-radius: 4px;
+            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -525,326 +525,189 @@ foreach ($all_parts as $part_id => $part) {
             </div>
         </div>
 
-        <!-- Master Entries Section - Only visible to Admin -->
-        <?php if (isAdmin()): ?>
-        <div class="master-entries">
-            <div class="row mt-4">
-                <div class="col-12">
-                    <h4 class="mb-3 border-bottom pb-2">
-                        <i class="bi bi-database"></i> Master Entries (Admin Only)
-                    </h4>
-                </div>
-                
-                <!-- Bike Companies -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-primary">
-                        <div class="card-body text-center">
-                            <i class="bi bi-building fs-1 text-primary"></i>
-                            <h5 class="card-title mt-2">Bike Companies</h5>
-                            <p class="card-text text-muted small">Add/Edit bike & scooty companies</p>
-                            <a href="companies.php" class="btn btn-outline-primary btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">Purchase entry & stock update</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Bike Models -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-success">
-                        <div class="card-body text-center">
-                            <i class="bi bi-gear fs-1 text-success"></i>
-                            <h5 class="card-title mt-2">Bike Models</h5>
-                            <p class="card-text text-muted small">Add models for each company</p>
-                            <a href="models.php" class="btn btn-outline-success btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">View current stock & movements</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Categories -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-warning">
-                        <div class="card-body text-center">
-                            <i class="bi bi-tags fs-1 text-warning"></i>
-                            <h5 class="card-title mt-2">Categories</h5>
-                            <p class="card-text text-muted small">Manage part categories</p>
-                            <a href="categories.php" class="btn btn-outline-warning btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">Profit/Loss, Sales reports</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Parts Master -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-info">
-                        <div class="card-body text-center">
-                            <i class="bi bi-box-seam fs-1 text-info"></i>
-                            <h5 class="card-title mt-2">Parts Master</h5>
-                            <p class="card-text text-muted small">Add parts with part numbers</p>
-                            <a href="parts.php" class="btn btn-outline-info btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">View all parts</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Suppliers -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-secondary">
-                        <div class="card-body text-center">
-                            <i class="bi bi-truck fs-1 text-secondary"></i>
-                            <h5 class="card-title mt-2">Suppliers</h5>
-                            <p class="card-text text-muted small">Manage vendors/suppliers</p>
-                            <a href="suppliers.php" class="btn btn-outline-secondary btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">Vendor management</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Customers (Admin can manage) -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-primary">
-                        <div class="card-body text-center">
-                            <i class="bi bi-people fs-1 text-primary"></i>
-                            <h5 class="card-title mt-2">Customers</h5>
-                            <p class="card-text text-muted small">Manage customers with vehicle details</p>
-                            <a href="customers.php" class="btn btn-outline-primary btn-sm w-100">Manage</a>
-                            <small class="text-muted d-block mt-2">Add/Edit/Delete customers</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- System Settings -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-dark">
-                        <div class="card-body text-center">
-                            <i class="bi bi-gear fs-1 text-dark"></i>
-                            <h5 class="card-title mt-2">System Settings</h5>
-                            <p class="card-text text-muted small">Configure invoice & business info</p>
-                            <a href="settings.php" class="btn btn-outline-dark btn-sm w-100">Configure</a>
-                            <small class="text-muted d-block mt-2">Invoice format, GST, etc.</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Reports & Analytics -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-danger">
-                        <div class="card-body text-center">
-                            <i class="bi bi-graph-up fs-1 text-danger"></i>
-                            <h5 class="card-title mt-2">Profit & Loss</h5>
-                            <p class="card-text text-muted small">View revenue, costs and profits</p>
-                            <a href="profit_loss.php" class="btn btn-outline-danger btn-sm w-100">View P&L</a>
-                            <small class="text-muted d-block mt-2">Financial analysis</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Simple Accounting -->
-                <div class="col-md-3 mb-3">
-                    <div class="card h-100 border-success">
-                        <div class="card-body text-center">
-                            <i class="bi bi-calculator fs-1 text-success"></i>
-                            <h5 class="card-title mt-2">Simple Accounting</h5>
-                            <p class="card-text text-muted small">Track income, expenses & balance</p>
-                            <a href="simple_accounting.php" class="btn btn-outline-success btn-sm w-100">View Accounting</a>
-                            <small class="text-muted d-block mt-2">Today's income & total balance</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+       <!-- Master Entries Section - Only visible to Admin -->
+<?php if (isAdmin()): ?>
+<div class="master-entries">
+    <div class="row mt-4">
+        <div class="col-12">
+            <h4 class="mb-3 border-bottom pb-2">
+                <i class="bi bi-database"></i> Master Entries (Admin Only)
+            </h4>
         </div>
-
-        <!-- ===== NEW: SUPPLIER PRICE COMPARE SECTION ===== -->
-        <div class="supplier-price-compare">
-            <div class="header">
-                <h5 class="mb-0">
-                    <i class="bi bi-currency-exchange"></i> Supplier Price Compare 
-                    <small class="text-white-50">(Compare purchase prices across all suppliers)</small>
-                </h5>
-            </div>
-
-            <?php if (!empty($all_parts) && !empty($all_suppliers)): ?>
-            
-            <!-- Summary Cards -->
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="stats-mini-card">
-                        <small class="text-muted">Total Parts</small>
-                        <h4><?php echo count($all_parts); ?></h4>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-mini-card">
-                        <small class="text-muted">Total Suppliers</small>
-                        <h4><?php echo count($all_suppliers); ?></h4>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-mini-card">
-                        <small class="text-muted">Parts with Multiple Suppliers</small>
-                        <h4><?php echo count($part_stats); ?></h4>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-mini-card">
-                        <small class="text-muted">Avg Price Variation</small>
-                        <h4>
-                            <?php 
-                            $avg_variation = 0;
-                            if (count($part_stats) > 0) {
-                                $total_variation = array_sum(array_column($part_stats, 'variation_percent'));
-                                $avg_variation = round($total_variation / count($part_stats), 2);
-                            }
-                            echo $avg_variation . '%';
-                            ?>
-                        </h4>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Filter Section -->
-            <div class="filter-section">
-                <div class="row">
-                    <div class="col-md-4">
-                        <label class="form-label">Filter by Category</label>
-                        <select class="form-select" id="categoryFilter">
-                            <option value="all">All Categories</option>
-                            <?php 
-                            $categories = array_unique(array_column($all_parts, 'category'));
-                            sort($categories);
-                            foreach($categories as $cat): 
-                            ?>
-                            <option value="<?php echo htmlspecialchars($cat); ?>"><?php echo htmlspecialchars($cat); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Show only parts with</label>
-                        <select class="form-select" id="variationFilter">
-                            <option value="all">All Parts</option>
-                            <option value="multiple">Multiple Suppliers</option>
-                            <option value="single">Single Supplier</option>
-                            <option value="high">High Variation (>30%)</option>
-                            <option value="medium">Medium Variation (15-30%)</option>
-                            <option value="low">Low Variation (<15%)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Search Part</label>
-                        <input type="text" class="form-control" id="searchPart" placeholder="Part name or number...">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Price Matrix Table -->
-            <div class="price-matrix">
-                <table class="table table-bordered" id="priceMatrixTable">
-                    <thead>
-                        <tr>
-                            <th style="min-width: 250px;">Part Details</th>
-                            <?php foreach($all_suppliers as $supplier): ?>
-                            <th class="supplier-col">
-                                <?php echo htmlspecialchars($supplier['name']); ?>
-                                <br><small class="badge-supplier">ID: <?php echo $supplier['id']; ?></small>
-                            </th>
-                            <?php endforeach; ?>
-                            <th style="min-width: 150px;">Statistics</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($all_parts as $part_id => $part): ?>
-                        <tr class="part-row" data-category="<?php echo htmlspecialchars($part['category']); ?>" 
-                            data-part-name="<?php echo strtolower(htmlspecialchars($part['part_name'])); ?>"
-                            data-part-number="<?php echo strtolower(htmlspecialchars($part['part_number'])); ?>"
-                            data-supplier-count="<?php echo isset($price_matrix[$part_id]) ? count($price_matrix[$part_id]) : 0; ?>"
-                            data-variation="<?php echo isset($part_stats[$part_id]) ? $part_stats[$part_id]['variation_percent'] : 0; ?>">
-                            
-                            <!-- Part Info -->
-                            <td class="part-info">
-                                <strong><?php echo htmlspecialchars($part['part_number']); ?></strong>
-                                <br><?php echo htmlspecialchars($part['part_name']); ?>
-                                <br><small class="text-muted"><?php echo htmlspecialchars($part['category']); ?></small>
-                                <?php if(isset($part_stats[$part_id])): ?>
-                                <br>
-                                <span class="variation-indicator <?php 
-                                    if($part_stats[$part_id]['variation_percent'] > 30) echo 'variation-high';
-                                    elseif($part_stats[$part_id]['variation_percent'] > 15) echo 'variation-medium';
-                                    else echo 'variation-low';
-                                ?>"></span>
-                                <small><?php echo $part_stats[$part_id]['supplier_count']; ?> suppliers</small>
-                                <?php endif; ?>
-                            </td>
-                            
-                            <!-- Supplier Prices -->
-                            <?php foreach($all_suppliers as $supplier_id => $supplier): ?>
-                            <td class="<?php 
-                                if(isset($price_matrix[$part_id][$supplier_id])) {
-                                    $price = $price_matrix[$part_id][$supplier_id]['price'];
-                                    if(isset($part_stats[$part_id])) {
-                                        if($price == $part_stats[$part_id]['min_price']) echo 'price-lowest';
-                                        elseif($price == $part_stats[$part_id]['max_price']) echo 'price-highest';
-                                    }
-                                }
-                            ?>">
-                                <?php if(isset($price_matrix[$part_id][$supplier_id])): 
-                                    $data = $price_matrix[$part_id][$supplier_id];
-                                ?>
-                                    <strong>₹<?php echo number_format($data['price'], 2); ?></strong>
-                                    <br><small class="text-muted">Qty: <?php echo $data['quantity']; ?></small>
-                                    <br><small class="text-muted"><?php echo date('d-m-Y', strtotime($data['date'])); ?></small>
-                                    <br><span class="badge bg-secondary"><?php echo $data['invoice']; ?></span>
-                                <?php else: ?>
-                                    <span class="text-muted">-</span>
-                                <?php endif; ?>
-                            </td>
-                            <?php endforeach; ?>
-                            
-                            <!-- Statistics -->
-                            <td>
-                                <?php if(isset($part_stats[$part_id])): 
-                                    $stats = $part_stats[$part_id];
-                                ?>
-                                    <div class="text-start">
-                                        <small>Min: <span class="text-success">₹<?php echo number_format($stats['min_price'], 2); ?></span></small><br>
-                                        <small>Max: <span class="text-danger">₹<?php echo number_format($stats['max_price'], 2); ?></span></small><br>
-                                        <small>Avg: ₹<?php echo number_format($stats['avg_price'], 2); ?></small><br>
-                                        <small>Diff: <strong>₹<?php echo number_format($stats['difference'], 2); ?></strong></small><br>
-                                        <small>Var: <strong class="<?php 
-                                            if($stats['variation_percent'] > 30) echo 'text-danger';
-                                            elseif($stats['variation_percent'] > 15) echo 'text-warning';
-                                            else echo 'text-success';
-                                        ?>"><?php echo $stats['variation_percent']; ?>%</strong></small>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-muted">Single supplier</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Export Options -->
-            <div class="mt-3 text-end">
-                <button class="btn btn-sm btn-outline-secondary" onclick="exportToCSV()">
-                    <i class="bi bi-download"></i> Export to CSV
-                </button>
-                <button class="btn btn-sm btn-outline-primary" onclick="printComparison()">
-                    <i class="bi bi-printer"></i> Print
-                </button>
-            </div>
-
-            <?php else: ?>
-            <div class="alert alert-info text-center py-4">
-                <i class="bi bi-info-circle fs-1"></i>
-                <p class="mt-3">No supplier price data available. Start adding purchases from different suppliers to see price comparisons.</p>
-                <a href="purchases.php" class="btn btn-primary">Add New Purchase</a>
-            </div>
-            <?php endif; ?>
-        </div>
-        <!-- ===== END OF SUPPLIER PRICE COMPARE SECTION ===== -->
         
+        <!-- Bike Companies -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body text-center">
+                    <i class="bi bi-building fs-1 text-primary"></i>
+                    <h5 class="card-title mt-2">Bike Companies</h5>
+                    <p class="card-text text-muted small">Add/Edit bike & scooty companies</p>
+                    <a href="companies.php" class="btn btn-outline-primary btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">Purchase entry & stock update</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bike Models -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-success">
+                <div class="card-body text-center">
+                    <i class="bi bi-gear fs-1 text-success"></i>
+                    <h5 class="card-title mt-2">Bike Models</h5>
+                    <p class="card-text text-muted small">Add models for each company</p>
+                    <a href="models.php" class="btn btn-outline-success btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">View current stock & movements</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Categories -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-warning">
+                <div class="card-body text-center">
+                    <i class="bi bi-tags fs-1 text-warning"></i>
+                    <h5 class="card-title mt-2">Categories</h5>
+                    <p class="card-text text-muted small">Manage part categories</p>
+                    <a href="categories.php" class="btn btn-outline-warning btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">Profit/Loss, Sales reports</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Parts Master -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-info">
+                <div class="card-body text-center">
+                    <i class="bi bi-box-seam fs-1 text-info"></i>
+                    <h5 class="card-title mt-2">Parts Master</h5>
+                    <p class="card-text text-muted small">Add parts with part numbers</p>
+                    <a href="parts.php" class="btn btn-outline-info btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">View all parts</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Suppliers -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-secondary">
+                <div class="card-body text-center">
+                    <i class="bi bi-truck fs-1 text-secondary"></i>
+                    <h5 class="card-title mt-2">Suppliers</h5>
+                    <p class="card-text text-muted small">Manage vendors/suppliers</p>
+                    <a href="suppliers.php" class="btn btn-outline-secondary btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">Vendor management</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Customers (Admin can manage) -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body text-center">
+                    <i class="bi bi-people fs-1 text-primary"></i>
+                    <h5 class="card-title mt-2">Customers</h5>
+                    <p class="card-text text-muted small">Manage customers with vehicle details</p>
+                    <a href="customers.php" class="btn btn-outline-primary btn-sm w-100">Manage</a>
+                    <small class="text-muted d-block mt-2">Add/Edit/Delete customers</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Settings -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-dark">
+                <div class="card-body text-center">
+                    <i class="bi bi-gear fs-1 text-dark"></i>
+                    <h5 class="card-title mt-2">System Settings</h5>
+                    <p class="card-text text-muted small">Configure invoice & business info</p>
+                    <a href="settings.php" class="btn btn-outline-dark btn-sm w-100">Configure</a>
+                    <small class="text-muted d-block mt-2">Invoice format, GST, etc.</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Reports & Analytics -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-danger">
+                <div class="card-body text-center">
+                    <i class="bi bi-graph-up fs-1 text-danger"></i>
+                    <h5 class="card-title mt-2">Profit & Loss</h5>
+                    <p class="card-text text-muted small">View revenue, costs and profits</p>
+                    <a href="profit_loss.php" class="btn btn-outline-danger btn-sm w-100">View P&L</a>
+                    <small class="text-muted d-block mt-2">Financial analysis</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Simple Accounting -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 border-success">
+                <div class="card-body text-center">
+                    <i class="bi bi-calculator fs-1 text-success"></i>
+                    <h5 class="card-title mt-2">Simple Accounting</h5>
+                    <p class="card-text text-muted small">Track income, expenses & balance</p>
+                    <a href="simple_accounting.php" class="btn btn-outline-success btn-sm w-100">View Accounting</a>
+                    <small class="text-muted d-block mt-2">Today's income & total balance</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== NEW: Supplier Price Compare Card ===== -->
+        <div class="col-md-3 mb-3">
+            <div class="card h-100" style="border-color: #6f42c1;">
+                <div class="card-body text-center">
+                    <i class="bi bi-currency-exchange fs-1" style="color: #6f42c1;"></i>
+                    <h5 class="card-title mt-2">Supplier Price Compare</h5>
+                    <p class="card-text text-muted small">Compare purchase prices across all suppliers</p>
+                    
+                    <!-- Quick Stats -->
+                    <div class="row g-1 mb-2">
+                        <div class="col-6">
+                            <div class="border rounded p-1">
+                                <small class="text-muted d-block">Parts</small>
+                                <strong><?php echo !empty($all_parts) ? count($all_parts) : 0; ?></strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-1">
+                                <small class="text-muted d-block">Suppliers</small>
+                                <strong><?php echo !empty($all_suppliers) ? count($all_suppliers) : 0; ?></strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if (!empty($all_parts) && !empty($all_suppliers)): ?>
+                        <!-- Variation Stats -->
+                        <div class="border rounded p-1 mb-2">
+                            <small class="text-muted d-block">Avg Price Variation</small>
+                            <strong class="<?php 
+                                $avg_variation = 0;
+                                if (!empty($part_stats)) {
+                                    $total_variation = array_sum(array_column($part_stats, 'variation_percent'));
+                                    $avg_variation = round($total_variation / count($part_stats), 2);
+                                }
+                                echo $avg_variation > 30 ? 'text-danger' : ($avg_variation > 15 ? 'text-warning' : 'text-success');
+                            ?>">
+                                <?php echo $avg_variation; ?>%
+                            </strong>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <!-- Button to open comparison page -->
+                    <a href="supplier_price_compare.php" class="btn btn-sm w-100" style="background-color: #6f42c1; color: white;">
+                        <i class="bi bi-eye"></i> View Price Comparison
+                    </a>
+                    
+                    <?php if (empty($all_parts) || empty($all_suppliers)): ?>
+                    <small class="text-muted d-block mt-2 text-warning">
+                        <i class="bi bi-exclamation-triangle"></i> No data available
+                    </small>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
         <?php endif; ?>
 
         <!-- Staff Operations - Visible to both Admin and Staff -->
