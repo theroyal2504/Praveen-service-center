@@ -28,24 +28,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_payment'])) {
     $notes = mysqli_real_escape_string($conn, $_POST['notes'] ?? '');
     $received_by = $_SESSION['user_id'];
     
+    // Check if discount is applied
+    $apply_discount = isset($_POST['apply_discount']) && $_POST['apply_discount'] == '1';
+    $discount_type = mysqli_real_escape_string($conn, $_POST['discount_type'] ?? 'fixed');
+    $discount_value = floatval($_POST['discount_value'] ?? 0);
+    $discount_note = mysqli_real_escape_string($conn, $_POST['discount_note'] ?? '');
+    
     // Start transaction
     mysqli_begin_transaction($conn);
     
     try {
         // Get current sale details
-        $current_sale = mysqli_fetch_assoc(mysqli_query($conn, "SELECT grand_total, paid_amount, total_amount FROM sales WHERE id = $sale_id"));
+        $current_sale = mysqli_fetch_assoc(mysqli_query($conn, "SELECT grand_total, paid_amount, total_amount, discount_amount, discount_type, discount_value FROM sales WHERE id = $sale_id"));
         
         // Use Grand Total from database
         $grand_total = $current_sale['grand_total'] ?? $current_sale['total_amount'];
         $new_paid_amount = $current_sale['paid_amount'] + $payment_amount;
         $new_due_amount = $grand_total - $new_paid_amount;
         
-        // Determine payment status
-        if ($new_due_amount <= 0) {
-            $payment_status = 'paid';
-            $new_due_amount = 0;
-        } else {
-            $payment_status = 'partial';
+        // Handle discount if applied
+        $discount_amount = 0;
+        if ($apply_discount && $discount_value > 0) {
+            // Calculate discount based on type
+            if ($discount_type == 'percentage') {
+                $discount_amount = ($grand_total * $discount_value) / 100;
+            } else {
+                $discount_amount = $discount_value;
+            }
+            
+            // Ensure discount doesn't exceed grand total
+            if ($discount_amount > $grand_total) {
+                $discount_amount = $grand_total;
+            }
+            
+            // Update grand total with discount
+            $new_grand_total = $grand_total - $discount_amount;
+            
+            // Update due amount based on new grand total
+            $new_due_amount = $new_grand_total - $new_paid_amount;
+            
+            // Update sale with discount information
+            $discount_update = "UPDATE sales SET 
+                               discount_amount = discount_amount + $discount_amount,
+                               discount_type = '$discount_type',
+                               discount_value = $discount_value,
+                               discount_note = CONCAT(IFNULL(discount_note, ''), ' | ', '$discount_note'),
+                               grand_total = $new_grand_total,
+                               due_amount = $new_due_amount
+                               WHERE id = $sale_id";
+            
+            if (!mysqli_query($conn, $discount_update)) {
+                throw new Exception("Error applying discount: " . mysqli_error($conn));
+            }
         }
         
         // Insert payment record
@@ -53,6 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_payment'])) {
                          VALUES ($sale_id, $payment_amount, '$payment_method', '$reference_number', '$notes', $received_by)";
         if (!mysqli_query($conn, $payment_query)) {
             throw new Exception("Error inserting payment: " . mysqli_error($conn));
+        }
+        
+        // Determine payment status
+        if ($new_due_amount <= 0) {
+            $payment_status = 'paid';
+            $new_due_amount = 0;
+        } else {
+            $payment_status = 'partial';
         }
         
         // Update sale with new paid and due amounts
@@ -67,11 +109,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_payment'])) {
         }
         
         mysqli_commit($conn);
-        $_SESSION['success'] = "Payment of ₹" . number_format($payment_amount, 2) . " added successfully! Due amount is now ₹" . number_format($new_due_amount, 2);
+        
+        $success_message = "Payment of ₹" . number_format($payment_amount, 2) . " added successfully!";
+        if ($apply_discount && $discount_amount > 0) {
+            $success_message .= " Discount of ₹" . number_format($discount_amount, 2) . " applied.";
+        }
+        $success_message .= " Due amount is now ₹" . number_format($new_due_amount, 2);
+        
+        $_SESSION['success'] = $success_message;
         
     } catch (Exception $e) {
         mysqli_rollback($conn);
         $_SESSION['error'] = "Error adding payment: " . $e->getMessage();
+    }
+    
+    redirect("sale_view.php?id=$sale_id");
+}
+
+// Handle discount removal
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['remove_discount'])) {
+    $sale_id = $_POST['sale_id'];
+    
+    mysqli_begin_transaction($conn);
+    
+    try {
+        // Get current sale details
+        $current_sale = mysqli_fetch_assoc(mysqli_query($conn, "SELECT grand_total, discount_amount, total_amount FROM sales WHERE id = $sale_id"));
+        
+        // Calculate original grand total (add back discount)
+        $original_grand_total = $current_sale['grand_total'] + $current_sale['discount_amount'];
+        
+        // Reset discount
+        $update_query = "UPDATE sales SET 
+                        discount_amount = 0,
+                        discount_type = NULL,
+                        discount_value = 0,
+                        discount_note = NULL,
+                        grand_total = $original_grand_total,
+                        due_amount = $original_grand_total - paid_amount
+                        WHERE id = $sale_id";
+        
+        if (!mysqli_query($conn, $update_query)) {
+            throw new Exception("Error removing discount: " . mysqli_error($conn));
+        }
+        
+        mysqli_commit($conn);
+        $_SESSION['success'] = "Discount removed successfully!";
+        
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        $_SESSION['error'] = "Error removing discount: " . $e->getMessage();
     }
     
     redirect("sale_view.php?id=$sale_id");
@@ -192,6 +279,25 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
             border-radius: 5px;
             font-size: 14px;
         }
+        
+        /* Discount toggle styles */
+        .discount-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .discount-toggle {
+            cursor: pointer;
+            color: #0d6efd;
+        }
+        .discount-toggle:hover {
+            text-decoration: underline;
+        }
+        .discount-inputs {
+            display: none;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -279,6 +385,14 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
                             <span class="savings-badge ms-2">
                                 <i class="bi bi-piggy-bank"></i> You Saved: ₹<?php echo number_format($sale_details['discount_amount'], 2); ?>
                             </span>
+                            <?php if($_SESSION['role'] == 'admin'): ?>
+                            <form method="POST" class="d-inline ms-3" onsubmit="return confirm('Are you sure you want to remove this discount?');">
+                                <input type="hidden" name="sale_id" value="<?php echo $sale_id; ?>">
+                                <button type="submit" name="remove_discount" class="btn btn-sm btn-danger">
+                                    <i class="bi bi-x-circle"></i> Remove Discount
+                                </button>
+                            </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -570,7 +684,7 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
         </div>
     </div>
 
-    <!-- Add Payment Modal -->
+    <!-- Add Payment Modal with Discount Option -->
     <div class="modal fade" id="addPaymentModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -598,6 +712,42 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
                             <label class="form-label">Current Due Amount</label>
                             <input type="text" class="form-control" id="currentDue" value="<?php echo $correct_due_amount; ?>" readonly style="font-weight: bold; color: #dc3545; font-size: 1.2em;">
                         </div>
+                        
+                        <!-- Discount Toggle Section -->
+                        <?php if($_SESSION['role'] == 'admin'): ?>
+                        <div class="discount-section">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="applyDiscount" name="apply_discount" value="1">
+                                <label class="form-check-label discount-toggle" for="applyDiscount">
+                                    <i class="bi bi-tags"></i> Apply Discount
+                                </label>
+                            </div>
+                            
+                            <div class="discount-inputs" id="discountInputs">
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Discount Type</label>
+                                        <select class="form-control" name="discount_type" id="discountType">
+                                            <option value="fixed">Fixed Amount (₹)</option>
+                                            <option value="percentage">Percentage (%)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label">Discount Value</label>
+                                        <input type="number" step="0.01" class="form-control" name="discount_value" id="discountValue" min="0" onchange="calculateDiscount()">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Discount Note (Optional)</label>
+                                    <input type="text" class="form-control" name="discount_note" placeholder="Reason for discount">
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">New Grand Total After Discount</label>
+                                    <input type="text" class="form-control" id="newGrandTotal" readonly style="font-weight: bold; color: #28a745;">
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         
                         <div class="mb-3">
                             <label for="payment_amount" class="form-label">Payment Amount *</label>
@@ -644,7 +794,31 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
     function updateRemainingDue() {
         const currentDue = parseFloat(document.getElementById('currentDue').value) || 0;
         const paymentAmount = parseFloat(document.getElementById('payment_amount').value) || 0;
-        const remainingDue = currentDue - paymentAmount;
+        const discountCheckbox = document.getElementById('applyDiscount');
+        let finalDue = currentDue;
+        
+        // If discount is applied, adjust the due amount
+        if (discountCheckbox && discountCheckbox.checked) {
+            const discountValue = parseFloat(document.getElementById('discountValue').value) || 0;
+            const discountType = document.getElementById('discountType').value;
+            const grandTotal = <?php echo $grand_total; ?>;
+            
+            let discountAmount = 0;
+            if (discountType === 'percentage') {
+                discountAmount = (grandTotal * discountValue) / 100;
+            } else {
+                discountAmount = discountValue;
+            }
+            
+            // Ensure discount doesn't exceed grand total
+            if (discountAmount > grandTotal) {
+                discountAmount = grandTotal;
+            }
+            
+            finalDue = currentDue - discountAmount;
+        }
+        
+        const remainingDue = finalDue - paymentAmount;
         
         let remainingElement = document.getElementById('remainingDue');
         remainingElement.value = '₹' + remainingDue.toFixed(2);
@@ -657,8 +831,9 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
             remainingElement.style.fontWeight = 'bold';
         }
         
-        if (paymentAmount > currentDue) {
-            document.getElementById('payment_amount').setCustomValidity('Payment amount cannot exceed due amount');
+        // Validate payment amount
+        if (paymentAmount > finalDue) {
+            document.getElementById('payment_amount').setCustomValidity('Payment amount cannot exceed due amount after discount');
             document.getElementById('submitPayment').disabled = true;
         } else {
             document.getElementById('payment_amount').setCustomValidity('');
@@ -666,8 +841,65 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
         }
     }
     
-    document.getElementById('addPaymentModal').addEventListener('shown.bs.modal', function () {
+    function calculateDiscount() {
+        const grandTotal = <?php echo $grand_total; ?>;
+        const discountValue = parseFloat(document.getElementById('discountValue').value) || 0;
+        const discountType = document.getElementById('discountType').value;
+        const currentDue = parseFloat(document.getElementById('currentDue').value) || 0;
+        
+        let discountAmount = 0;
+        if (discountType === 'percentage') {
+            discountAmount = (grandTotal * discountValue) / 100;
+        } else {
+            discountAmount = discountValue;
+        }
+        
+        // Ensure discount doesn't exceed grand total
+        if (discountAmount > grandTotal) {
+            discountAmount = grandTotal;
+        }
+        
+        const newGrandTotal = grandTotal - discountAmount;
+        document.getElementById('newGrandTotal').value = '₹' + newGrandTotal.toFixed(2);
+        
+        // Update max payment amount
+        const paymentInput = document.getElementById('payment_amount');
+        paymentInput.max = currentDue - discountAmount;
+        
+        // Update remaining due
         updateRemainingDue();
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const discountCheckbox = document.getElementById('applyDiscount');
+        const discountInputs = document.getElementById('discountInputs');
+        
+        if (discountCheckbox) {
+            discountCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    discountInputs.style.display = 'block';
+                } else {
+                    discountInputs.style.display = 'none';
+                    document.getElementById('newGrandTotal').value = '';
+                }
+                updateRemainingDue();
+            });
+        }
+        
+        document.getElementById('addPaymentModal').addEventListener('shown.bs.modal', function () {
+            updateRemainingDue();
+        });
+        
+        // Add event listeners for discount inputs
+        const discountValue = document.getElementById('discountValue');
+        const discountType = document.getElementById('discountType');
+        
+        if (discountValue) {
+            discountValue.addEventListener('input', calculateDiscount);
+        }
+        if (discountType) {
+            discountType.addEventListener('change', calculateDiscount);
+        }
     });
     </script>
 

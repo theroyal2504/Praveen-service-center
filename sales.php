@@ -8,6 +8,69 @@ if (!isLoggedIn()) {
 // Generate new invoice number
 $invoice_number = generateInvoiceNumber($conn);
 
+// Handle save draft
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_draft'])) {
+    $draft_data = [
+        'customer_id' => $_POST['customer_id'] ?? '',
+        'vehicle_registration' => $_POST['vehicle_registration'] ?? '',
+        'sale_date' => $_POST['sale_date'],
+        'invoice_number' => $_POST['invoice_number'],
+        'payment_method' => $_POST['payment_method'],
+        'paid_amount' => floatval($_POST['paid_amount'] ?? 0),
+        'discount_type' => $_POST['discount_type'] ?? 'fixed',
+        'discount_value' => floatval($_POST['discount_value'] ?? 0),
+        'items' => []
+    ];
+    
+    // Save items
+    $part_ids = $_POST['part_id'] ?? [];
+    $quantities = $_POST['quantity'] ?? [];
+    $selling_prices = $_POST['selling_price'] ?? [];
+    
+    for ($i = 0; $i < count($part_ids); $i++) {
+        if (!empty($part_ids[$i]) && !empty($quantities[$i]) && $quantities[$i] > 0) {
+            $draft_data['items'][] = [
+                'part_id' => $part_ids[$i],
+                'quantity' => intval($quantities[$i]),
+                'selling_price' => floatval($selling_prices[$i])
+            ];
+        }
+    }
+    
+    // New customer data if any
+    if (isset($_POST['new_customer']) && $_POST['new_customer'] == '1') {
+        $draft_data['new_customer'] = [
+            'name' => $_POST['new_customer_name'] ?? '',
+            'phone' => $_POST['new_customer_phone'] ?? '',
+            'vehicle' => $_POST['new_vehicle_registration'] ?? ''
+        ];
+    }
+    
+    // Save to session
+    $_SESSION['sale_draft'] = $draft_data;
+    $_SESSION['success'] = "Sale saved as draft. You can continue later.";
+    redirect('sales.php?draft=1');
+}
+
+// Handle load draft
+if (isset($_GET['load_draft'])) {
+    if (isset($_SESSION['sale_draft'])) {
+        $draft = $_SESSION['sale_draft'];
+        // Draft will be loaded via JavaScript
+        $_SESSION['info'] = "Draft loaded. Complete the sale or save again.";
+    } else {
+        $_SESSION['error'] = "No draft found.";
+    }
+    redirect('sales.php');
+}
+
+// Handle clear draft
+if (isset($_GET['clear_draft'])) {
+    unset($_SESSION['sale_draft']);
+    $_SESSION['success'] = "Draft cleared.";
+    redirect('sales.php');
+}
+
 // Handle new sale
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
     $customer_id = $_POST['customer_id'] ?: 'NULL';
@@ -67,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
         $selling_prices = $_POST['selling_price'];
         
         $total_amount = 0;
+        $out_of_stock_items = [];
         
         for ($i = 0; $i < count($part_ids); $i++) {
             if (!empty($part_ids[$i]) && $quantities[$i] > 0) {
@@ -88,9 +152,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
                     // Update stock
                     mysqli_query($conn, "UPDATE stock SET quantity = quantity - $quantity WHERE part_id = $part_id");
                 } else {
-                    throw new Exception("Insufficient stock for item");
+                    // Get part name for better error message
+                    $part_query = mysqli_query($conn, "SELECT part_name FROM parts_master WHERE id = $part_id");
+                    $part_data = mysqli_fetch_assoc($part_query);
+                    $out_of_stock_items[] = $part_data['part_name'] . " (Available: " . $stock['quantity'] . ", Requested: " . $quantity . ")";
                 }
             }
+        }
+        
+        // If there are out of stock items, throw exception with details
+        if (!empty($out_of_stock_items)) {
+            throw new Exception("Insufficient stock for following items:\n- " . implode("\n- ", $out_of_stock_items) . "\n\nYou can save this as draft and purchase items first.");
         }
         
         // Calculate discount amount
@@ -149,6 +221,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
         }
         
         mysqli_commit($conn);
+        
+        // Clear draft after successful sale
+        unset($_SESSION['sale_draft']);
         
         $_SESSION['success'] = "Sale completed successfully! Invoice: $invoice_number (Grand Total: ₹" . number_format($grand_total, 2) . ", Paid: ₹" . number_format($paid_amount, 2) . ", Due: ₹" . number_format($due_amount, 2) . ")";
         redirect("sale_view.php?id=$sale_id");
@@ -219,6 +294,9 @@ while($p = mysqli_fetch_assoc($parts)) {
         $categories_list[] = $cat;
     }
 }
+
+// Get draft data if exists
+$draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -279,6 +357,25 @@ while($p = mysqli_fetch_assoc($parts)) {
             color: #6c757d;
             margin-top: 5px;
         }
+        .draft-badge {
+            background-color: #ffc107;
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .out-of-stock-warning {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .draft-actions {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -333,11 +430,50 @@ while($p = mysqli_fetch_assoc($parts)) {
             </div>
         <?php endif; ?>
 
+        <?php if (isset($_SESSION['info'])): ?>
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <?php 
+                echo $_SESSION['info']; 
+                unset($_SESSION['info']);
+                ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <!-- Draft Actions -->
+        <?php if ($draft_data): ?>
+        <div class="draft-actions">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="mb-2"><i class="bi bi-save"></i> Draft Sale Available</h5>
+                    <p class="mb-0">
+                        <span class="draft-badge"><i class="bi bi-calendar"></i> <?php echo date('d-m-Y H:i', strtotime($draft_data['sale_date'] ?? 'now')); ?></span>
+                        <span class="badge bg-secondary">Items: <?php echo count($draft_data['items'] ?? []); ?></span>
+                        <span class="badge bg-info">Invoice: <?php echo htmlspecialchars($draft_data['invoice_number'] ?? ''); ?></span>
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="?load_draft=1" class="btn btn-warning">
+                        <i class="bi bi-arrow-repeat"></i> Load Draft
+                    </a>
+                    <a href="?clear_draft=1" class="btn btn-danger" onclick="return confirm('Clear this draft?')">
+                        <i class="bi bi-x-circle"></i> Clear
+                    </a>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="row">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header bg-primary text-white">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0"><i class="bi bi-cart-plus"></i> New Sale / Billing</h5>
+                        <div>
+                            <button type="button" class="btn btn-warning btn-sm" id="checkStockBtn">
+                                <i class="bi bi-exclamation-triangle"></i> Check Stock Availability
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form method="POST" id="saleForm">
@@ -511,6 +647,11 @@ while($p = mysqli_fetch_assoc($parts)) {
                                 </table>
                             </div>
                             
+                            <!-- Stock Warning Area -->
+                            <div id="stockWarning" class="alert alert-warning" style="display: none;">
+                                <i class="bi bi-exclamation-triangle"></i> <span id="stockWarningMessage"></span>
+                            </div>
+                            
                             <!-- Calculation Section with Discount -->
                             <div class="row calculation-row">
                                 <div class="col-md-6">
@@ -519,6 +660,9 @@ while($p = mysqli_fetch_assoc($parts)) {
                                     </button>
                                     <button type="button" class="btn btn-info" id="calculateTotal">
                                         <i class="bi bi-calculator"></i> Calculate Total
+                                    </button>
+                                    <button type="submit" name="save_draft" class="btn btn-warning" id="saveDraft">
+                                        <i class="bi bi-save"></i> Save as Draft
                                     </button>
                                 </div>
                                 <div class="col-md-6">
@@ -588,116 +732,121 @@ while($p = mysqli_fetch_assoc($parts)) {
             </div>
         </div>
 
-<!-- Recent Sales Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sales</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped table-hover">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Date</th>
-                                <th>Invoice #</th>
-                                <th>Customer</th>
-                                <th>Vehicle</th>
-                                <th>Sub Total</th>
-                                <th>Discount</th>
-                                <th>Grand Total</th>
-                                <th>Paid</th>
-                                <th>Due</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            // Reset the sales pointer
-                            mysqli_data_seek($sales, 0);
-                            while($sale = mysqli_fetch_assoc($sales)): 
-                                // Get subtotal from sale items
-                                $subtotal_query = mysqli_query($conn, "SELECT SUM(quantity * selling_price) as subtotal 
-                                                                      FROM sale_items WHERE sale_id = " . $sale['id']);
-                                $subtotal_data = mysqli_fetch_assoc($subtotal_query);
-                                $subtotal = $subtotal_data['subtotal'] ?? $sale['total_amount'];
-                                
-                                // Get discount amount from sales table
-                                $discount_amount = $sale['discount_amount'] ?? 0;
-                                
-                                // Grand total is stored in total_amount (after discount)
-                                $grand_total = $sale['total_amount'];
-                                
-                                // Calculate due amount
-                                $due_amount = $grand_total - $sale['paid_amount'];
-                            ?>
-                            <tr>
-                                <td><?php echo date('d-m-Y', strtotime($sale['sale_date'])); ?></td>
-                                <td><strong><?php echo htmlspecialchars($sale['invoice_number']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($sale['customer_name'] ?? 'Walk-in'); ?></td>
-                                <td>
-                                    <?php if($sale['vehicle_registration']): ?>
-                                        <span class="badge bg-info"><?php echo $sale['vehicle_registration']; ?></span>
-                                    <?php else: ?>
-                                        -
-                                    <?php endif; ?>
-                                </td>
-                                <td class="text-secondary">₹<?php echo number_format($subtotal, 2); ?></td>
-                                <td class="text-info">
-                                    <?php if($discount_amount > 0): ?>
-                                        -₹<?php echo number_format($discount_amount, 2); ?>
-                                        <?php if(isset($sale['discount_type']) && $sale['discount_type'] == 'percentage'): ?>
-                                            <br><small>(<?php echo $sale['discount_value']; ?>%)</small>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        -
-                                    <?php endif; ?>
-                                </td>
-                                <td class="text-primary"><strong>₹<?php echo number_format($grand_total, 2); ?></strong></td>
-                                <td class="text-success">₹<?php echo number_format($sale['paid_amount'], 2); ?></td>
-                                <td class="text-<?php echo $due_amount > 0 ? 'danger' : 'success'; ?>">
-                                    ₹<?php echo number_format($due_amount, 2); ?>
-                                </td>
-                                <td>
+        <!-- Recent Sales Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sales</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Invoice #</th>
+                                        <th>Customer</th>
+                                        <th>Vehicle</th>
+                                        <th>Sub Total</th>
+                                        <th>Discount</th>
+                                        <th>Grand Total</th>
+                                        <th>Paid</th>
+                                        <th>Due</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                                     <?php 
-                                    $status_class = 'success';
-                                    $status_text = 'Paid';
-                                    if($due_amount > 0 && $sale['paid_amount'] > 0) {
-                                        $status_class = 'warning';
-                                        $status_text = 'Partial';
-                                    } elseif($due_amount == $grand_total && $grand_total > 0) {
-                                        $status_class = 'danger';
-                                        $status_text = 'Pending';
-                                    }
+                                    // Reset the sales pointer
+                                    mysqli_data_seek($sales, 0);
+                                    while($sale = mysqli_fetch_assoc($sales)): 
+                                        // Get subtotal from sale items
+                                        $subtotal_query = mysqli_query($conn, "SELECT SUM(quantity * selling_price) as subtotal 
+                                                                              FROM sale_items WHERE sale_id = " . $sale['id']);
+                                        $subtotal_data = mysqli_fetch_assoc($subtotal_query);
+                                        $subtotal = $subtotal_data['subtotal'] ?? $sale['total_amount'];
+                                        
+                                        // Get discount amount from sales table
+                                        $discount_amount = $sale['discount_amount'] ?? 0;
+                                        
+                                        // Grand total is stored in total_amount (after discount)
+                                        $grand_total = $sale['total_amount'];
+                                        
+                                        // Calculate due amount
+                                        $due_amount = $grand_total - $sale['paid_amount'];
                                     ?>
-                                    <span class="badge bg-<?php echo $status_class; ?>">
-                                        <?php echo $status_text; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="sale_view.php?id=<?php echo $sale['id']; ?>" class="btn btn-info" title="View">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <a href="invoice.php?id=<?php echo $sale['id']; ?>" class="btn btn-secondary" target="_blank" title="Print">
-                                            <i class="bi bi-printer"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
+                                    <tr>
+                                        <td><?php echo date('d-m-Y', strtotime($sale['sale_date'])); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($sale['invoice_number']); ?></strong></td>
+                                        <td><?php echo htmlspecialchars($sale['customer_name'] ?? 'Walk-in'); ?></td>
+                                        <td>
+                                            <?php if($sale['vehicle_registration']): ?>
+                                                <span class="badge bg-info"><?php echo $sale['vehicle_registration']; ?></span>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-secondary">₹<?php echo number_format($subtotal, 2); ?></td>
+                                        <td class="text-info">
+                                            <?php if($discount_amount > 0): ?>
+                                                -₹<?php echo number_format($discount_amount, 2); ?>
+                                                <?php if(isset($sale['discount_type']) && $sale['discount_type'] == 'percentage'): ?>
+                                                    <br><small>(<?php echo $sale['discount_value']; ?>%)</small>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-primary"><strong>₹<?php echo number_format($grand_total, 2); ?></strong></td>
+                                        <td class="text-success">₹<?php echo number_format($sale['paid_amount'], 2); ?></td>
+                                        <td class="text-<?php echo $due_amount > 0 ? 'danger' : 'success'; ?>">
+                                            ₹<?php echo number_format($due_amount, 2); ?>
+                                        </td>
+                                        <td>
+                                            <?php 
+                                            $status_class = 'success';
+                                            $status_text = 'Paid';
+                                            if($due_amount > 0 && $sale['paid_amount'] > 0) {
+                                                $status_class = 'warning';
+                                                $status_text = 'Partial';
+                                            } elseif($due_amount == $grand_total && $grand_total > 0) {
+                                                $status_class = 'danger';
+                                                $status_text = 'Pending';
+                                            }
+                                            ?>
+                                            <span class="badge bg-<?php echo $status_class; ?>">
+                                                <?php echo $status_text; ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="sale_view.php?id=<?php echo $sale['id']; ?>" class="btn btn-info" title="View">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                <a href="invoice.php?id=<?php echo $sale['id']; ?>" class="btn btn-secondary" target="_blank" title="Print">
+                                                    <i class="bi bi-printer"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endwhile; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+
     <script>
     // Parts data
     var partsByCategory = <?php echo json_encode($parts_map); ?> || {};
+    
+    // Draft data
+    var draftData = <?php echo json_encode($draft_data); ?>;
 
     function loadCustomerVehicle() {
         const select = document.getElementById('customer_id');
@@ -721,6 +870,172 @@ while($p = mysqli_fetch_assoc($parts)) {
         if (selected.value) {
             document.getElementById('new_customer_name').value = selected.dataset.name || '';
             document.getElementById('new_customer_phone').value = selected.dataset.phone || '';
+        }
+    }
+
+    function checkStockAvailability() {
+        let outOfStockItems = [];
+        document.querySelectorAll('.item-row').forEach(row => {
+            const partSelect = row.querySelector('.part-select');
+            const quantity = parseInt(row.querySelector('.quantity').value) || 0;
+            const availableStock = parseInt(row.querySelector('.available-stock').value) || 0;
+            
+            if (partSelect && partSelect.value && quantity > 0 && quantity > availableStock) {
+                const partName = partSelect.options[partSelect.selectedIndex]?.text || 'Unknown';
+                outOfStockItems.push(`${partName} (Available: ${availableStock}, Requested: ${quantity})`);
+            }
+        });
+        
+        const warningDiv = document.getElementById('stockWarning');
+        const warningMsg = document.getElementById('stockWarningMessage');
+        
+        if (outOfStockItems.length > 0) {
+            warningMsg.innerHTML = 'Out of stock items detected:<br>- ' + outOfStockItems.join('<br>- ');
+            warningDiv.style.display = 'block';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+    }
+
+    function loadDraftData() {
+        if (!draftData) return;
+        
+        // Load customer data
+        if (draftData.customer_id) {
+            document.getElementById('customer_id').value = draftData.customer_id;
+            loadCustomerVehicle();
+        }
+        
+        // Load vehicle registration
+        if (draftData.vehicle_registration) {
+            document.getElementById('existing_vehicle').value = draftData.vehicle_registration;
+        }
+        
+        // Load date
+        if (draftData.sale_date) {
+            document.getElementById('sale_date').value = draftData.sale_date;
+        }
+        
+        // Load payment method
+        if (draftData.payment_method) {
+            document.getElementById('payment_method').value = draftData.payment_method;
+        }
+        
+        // Load paid amount
+        if (draftData.paid_amount) {
+            document.getElementById('paid_amount').value = draftData.paid_amount;
+        }
+        
+        // Load discount
+        if (draftData.discount_type) {
+            document.getElementById('discount_type').value = draftData.discount_type;
+        }
+        if (draftData.discount_value) {
+            document.getElementById('discount_value').value = draftData.discount_value;
+        }
+        
+        // Load new customer data if any
+        if (draftData.new_customer) {
+            document.getElementById('new_customer').checked = true;
+            document.getElementById('new_customer_name').value = draftData.new_customer.name || '';
+            document.getElementById('new_customer_phone').value = draftData.new_customer.phone || '';
+            document.getElementById('new_vehicle_registration').value = draftData.new_customer.vehicle || '';
+            
+            // Switch to new customer tab
+            document.getElementById('new-customer-tab').click();
+        }
+        
+        // Load items
+        if (draftData.items && draftData.items.length > 0) {
+            const tbody = document.querySelector('#itemsTable tbody');
+            
+            // Remove default empty row
+            while (tbody.rows.length > 0) {
+                tbody.deleteRow(0);
+            }
+            
+            // Add rows for each item
+            draftData.items.forEach((item, index) => {
+                if (index === 0) {
+                    // Modify the first row we'll add
+                    addNewRow(item);
+                } else {
+                    addNewRow(item);
+                }
+            });
+        }
+    }
+
+    function addNewRow(itemData = null) {
+        const tbody = document.querySelector('#itemsTable tbody');
+        const newRow = document.createElement('tr');
+        newRow.className = 'item-row';
+        
+        newRow.innerHTML = `
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <select class="form-control form-control-sm category-select" style="flex:0 0 45%;">
+                        <option value="">Category</option>
+                        <?php foreach($categories_list as $cat): ?>
+                            <option value="<?php echo htmlspecialchars($cat); ?>"><?php echo htmlspecialchars($cat); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select class="form-control form-control-sm part-select" name="part_id[]" required disabled style="flex:1;">
+                        <option value="">Select Part</option>
+                    </select>
+                </div>
+            </td>
+            <td><input type="text" class="form-control available-stock" readonly></td>
+            <td><input type="number" class="form-control quantity" name="quantity[]" min="1" required disabled></td>
+            <td><input type="number" step="0.01" class="form-control selling-price" name="selling_price[]" required disabled></td>
+            <td><input type="text" class="form-control row-total" readonly></td>
+            <td><button type="button" class="btn btn-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
+        `;
+        
+        tbody.appendChild(newRow);
+        
+        // If item data provided, populate it
+        if (itemData) {
+            populateRowWithData(newRow, itemData);
+        }
+    }
+
+    function populateRowWithData(row, itemData) {
+        // Find the part in partsByCategory to set category and part
+        for (let category in partsByCategory) {
+            const part = partsByCategory[category].find(p => p.id == itemData.part_id);
+            if (part) {
+                // Set category
+                const categorySelect = row.querySelector('.category-select');
+                categorySelect.value = category;
+                
+                // Trigger category change to load parts
+                const event = new Event('change', { bubbles: true });
+                categorySelect.dispatchEvent(event);
+                
+                // Set part after a short delay to allow parts to load
+                setTimeout(() => {
+                    const partSelect = row.querySelector('.part-select');
+                    partSelect.value = itemData.part_id;
+                    
+                    // Trigger part change to load details
+                    const partEvent = new Event('change', { bubbles: true });
+                    partSelect.dispatchEvent(partEvent);
+                    
+                    // Set quantity and price
+                    row.querySelector('.quantity').value = itemData.quantity;
+                    row.querySelector('.selling-price').value = itemData.selling_price;
+                    
+                    // Calculate row total
+                    const quantity = itemData.quantity;
+                    const price = itemData.selling_price;
+                    row.querySelector('.row-total').value = (quantity * price).toFixed(2);
+                    
+                    // Recalculate all totals
+                    calculateAll();
+                }, 100);
+                break;
+            }
         }
     }
 
@@ -792,6 +1107,9 @@ while($p = mysqli_fetch_assoc($parts)) {
                 dueAmountInput.style.backgroundColor = '#d4edda';
                 dueAmountInput.style.fontWeight = 'bold';
             }
+            
+            // Check stock availability
+            checkStockAvailability();
         }
 
         // Event listeners for discount
@@ -801,34 +1119,12 @@ while($p = mysqli_fetch_assoc($parts)) {
 
         // Add new row
         document.getElementById('addRow').addEventListener('click', function() {
-            const tbody = document.querySelector('#itemsTable tbody');
-            const newRow = tbody.rows[0].cloneNode(true);
-            
-            newRow.querySelectorAll('input').forEach(input => {
-                if (input.type !== 'button') input.value = '';
-            });
-
-            const categorySelect = newRow.querySelector('.category-select');
-            const partSelect = newRow.querySelector('.part-select');
-            if (categorySelect) categorySelect.selectedIndex = 0;
-            if (partSelect) {
-                partSelect.innerHTML = '<option value="">Select Part</option>';
-                partSelect.disabled = true;
-            }
-            
-            // Disable quantity and price fields
-            newRow.querySelector('.quantity').disabled = true;
-            newRow.querySelector('.selling-price').disabled = true;
-            
-            const removeBtn = newRow.querySelector('.remove-row');
-            removeBtn.addEventListener('click', function() {
-                if (tbody.rows.length > 1) {
-                    this.closest('tr').remove();
-                    calculateAll();
-                }
-            });
-            
-            tbody.appendChild(newRow);
+            addNewRow();
+        });
+        
+        // Check stock button
+        document.getElementById('checkStockBtn').addEventListener('click', function() {
+            checkStockAvailability();
         });
         
         // Remove row
@@ -919,37 +1215,76 @@ while($p = mysqli_fetch_assoc($parts)) {
         
         // Form validation
         document.getElementById('saleForm').addEventListener('submit', function(e) {
-            const newCustomerChecked = document.getElementById('new_customer').checked;
+            // Check if this is a draft save or complete sale
+            const isDraftSave = e.submitter && e.submitter.name === 'save_draft';
             
-            if (newCustomerChecked) {
-                const name = document.getElementById('new_customer_name').value;
-                const phone = document.getElementById('new_customer_phone').value;
+            if (!isDraftSave) {
+                // Validate for complete sale
+                const newCustomerChecked = document.getElementById('new_customer').checked;
                 
-                if (!name || !phone) {
+                if (newCustomerChecked) {
+                    const name = document.getElementById('new_customer_name').value;
+                    const phone = document.getElementById('new_customer_phone').value;
+                    
+                    if (!name || !phone) {
+                        e.preventDefault();
+                        alert('Please enter customer name and phone for new customer');
+                        return false;
+                    }
+                }
+                
+                const quantities = document.querySelectorAll('.quantity');
+                let hasItems = false;
+                quantities.forEach(q => {
+                    if (parseInt(q.value) > 0) hasItems = true;
+                });
+                
+                if (!hasItems) {
                     e.preventDefault();
-                    alert('Please enter customer name and phone for new customer');
+                    alert('Please add at least one item to the sale');
                     return false;
                 }
-            }
-            
-            const quantities = document.querySelectorAll('.quantity');
-            let hasItems = false;
-            quantities.forEach(q => {
-                if (parseInt(q.value) > 0) hasItems = true;
-            });
-            
-            if (!hasItems) {
-                e.preventDefault();
-                alert('Please add at least one item to the sale');
-                return false;
-            }
-            
-            const grandTotal = parseFloat(grandTotalInput.value) || 0;
-            const paidAmount = parseFloat(paidAmountInput.value) || 0;
-            
-            if (paidAmount > grandTotal) {
-                if (!confirm('Paid amount (₹' + paidAmount.toFixed(2) + ') is greater than grand total (₹' + grandTotal.toFixed(2) + '). Do you want to continue?')) {
+                
+                const grandTotal = parseFloat(grandTotalInput.value) || 0;
+                const paidAmount = parseFloat(paidAmountInput.value) || 0;
+                
+                if (paidAmount > grandTotal) {
+                    if (!confirm('Paid amount (₹' + paidAmount.toFixed(2) + ') is greater than grand total (₹' + grandTotal.toFixed(2) + '). Do you want to continue?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+                
+                // Check for out of stock items
+                let outOfStockItems = [];
+                document.querySelectorAll('.item-row').forEach(row => {
+                    const partSelect = row.querySelector('.part-select');
+                    const quantity = parseInt(row.querySelector('.quantity').value) || 0;
+                    const availableStock = parseInt(row.querySelector('.available-stock').value) || 0;
+                    
+                    if (partSelect && partSelect.value && quantity > 0 && quantity > availableStock) {
+                        const partName = partSelect.options[partSelect.selectedIndex]?.text || 'Unknown';
+                        outOfStockItems.push(partName);
+                    }
+                });
+                
+                if (outOfStockItems.length > 0) {
+                    if (!confirm('The following items are out of stock: ' + outOfStockItems.join(', ') + '. Do you want to save as draft instead?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            } else {
+                // For draft save, just ensure there's at least one item
+                const quantities = document.querySelectorAll('.quantity');
+                let hasItems = false;
+                quantities.forEach(q => {
+                    if (parseInt(q.value) > 0) hasItems = true;
+                });
+                
+                if (!hasItems) {
                     e.preventDefault();
+                    alert('Please add at least one item to save as draft');
                     return false;
                 }
             }
@@ -957,6 +1292,11 @@ while($p = mysqli_fetch_assoc($parts)) {
         
         // Initialize
         calculateAll();
+        
+        // Load draft data if available
+        if (draftData && Object.keys(draftData).length > 0) {
+            loadDraftData();
+        }
     });
     </script>
 

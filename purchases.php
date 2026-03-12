@@ -11,53 +11,96 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
     $purchase_date = $_POST['purchase_date'];
     $invoice_number = mysqli_real_escape_string($conn, $_POST['invoice_number']);
     $created_by = $_SESSION['user_id'];
+    $status = isset($_POST['save_as_draft']) ? 'draft' : 'completed';
     
     // Start transaction
     mysqli_begin_transaction($conn);
     
     try {
-        // Insert purchase
-        $query = "INSERT INTO purchases (supplier_id, purchase_date, invoice_number, created_by) 
-                  VALUES ($supplier_id, '$purchase_date', '$invoice_number', $created_by)";
+        // Insert purchase with status
+        $query = "INSERT INTO purchases (supplier_id, purchase_date, invoice_number, created_by, status, total_amount) 
+                  VALUES ($supplier_id, '$purchase_date', '$invoice_number', $created_by, '$status', 0)";
         mysqli_query($conn, $query);
         $purchase_id = mysqli_insert_id($conn);
         
-        // Insert purchase items
-        $part_ids = $_POST['part_id'];
-        $quantities = $_POST['quantity'];
-        $purchase_prices = $_POST['purchase_price'];
-        $selling_prices = $_POST['selling_price'];
-        
-        $total_amount = 0;
-        
-        for ($i = 0; $i < count($part_ids); $i++) {
-            if (!empty($part_ids[$i]) && $quantities[$i] > 0) {
-                $part_id = $part_ids[$i];
-                $quantity = $quantities[$i];
-                $purchase_price = $purchase_prices[$i];
-                $selling_price = $selling_prices[$i];
-                
-                $item_query = "INSERT INTO purchase_items (purchase_id, part_id, quantity, purchase_price, selling_price) 
-                              VALUES ($purchase_id, $part_id, $quantity, $purchase_price, $selling_price)";
-                mysqli_query($conn, $item_query);
-                
-                $total_amount += $quantity * $purchase_price;
-                
-                // Update stock
-                $stock_query = "UPDATE stock SET quantity = quantity + $quantity WHERE part_id = $part_id";
-                mysqli_query($conn, $stock_query);
+        // Check if there are items to insert
+        if (isset($_POST['part_id']) && is_array($_POST['part_id'])) {
+            $part_ids = $_POST['part_id'];
+            $quantities = $_POST['quantity'];
+            $purchase_prices = $_POST['purchase_price'];
+            $selling_prices = $_POST['selling_price'];
+            
+            $total_amount = 0;
+            $has_items = false;
+            
+            for ($i = 0; $i < count($part_ids); $i++) {
+                if (!empty($part_ids[$i]) && !empty($quantities[$i]) && $quantities[$i] > 0) {
+                    $part_id = $part_ids[$i];
+                    $quantity = $quantities[$i];
+                    $purchase_price = $purchase_prices[$i];
+                    $selling_price = $selling_prices[$i];
+                    
+                    $item_query = "INSERT INTO purchase_items (purchase_id, part_id, quantity, purchase_price, selling_price) 
+                                  VALUES ($purchase_id, $part_id, $quantity, $purchase_price, $selling_price)";
+                    mysqli_query($conn, $item_query);
+                    
+                    $total_amount += $quantity * $purchase_price;
+                    $has_items = true;
+                    
+                    // Update stock only if status is completed
+                    if ($status == 'completed') {
+                        $stock_query = "UPDATE stock SET quantity = quantity + $quantity WHERE part_id = $part_id";
+                        mysqli_query($conn, $stock_query);
+                    }
+                }
             }
+            
+            // Update total amount in purchase
+            mysqli_query($conn, "UPDATE purchases SET total_amount = $total_amount WHERE id = $purchase_id");
         }
         
-        // Update total amount in purchase
-        mysqli_query($conn, "UPDATE purchases SET total_amount = $total_amount WHERE id = $purchase_id");
-        
         mysqli_commit($conn);
-        $_SESSION['success'] = "Purchase added successfully!";
+        
+        if ($status == 'draft') {
+            $_SESSION['success'] = "Purchase draft saved successfully! You can complete it later.";
+        } else {
+            $_SESSION['success'] = "Purchase completed successfully!";
+        }
         
     } catch (Exception $e) {
         mysqli_rollback($conn);
         $_SESSION['error'] = "Error: " . $e->getMessage();
+    }
+    
+    redirect('purchases.php');
+}
+
+// Handle draft completion
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['complete_purchase'])) {
+    $purchase_id = $_POST['purchase_id'];
+    
+    mysqli_begin_transaction($conn);
+    
+    try {
+        // Get purchase items
+        $items_query = "SELECT * FROM purchase_items WHERE purchase_id = $purchase_id";
+        $items_result = mysqli_query($conn, $items_query);
+        
+        // Update stock for each item
+        while ($item = mysqli_fetch_assoc($items_result)) {
+            $stock_query = "UPDATE stock SET quantity = quantity + {$item['quantity']} WHERE part_id = {$item['part_id']}";
+            mysqli_query($conn, $stock_query);
+        }
+        
+        // Update purchase status
+        mysqli_query($conn, "UPDATE purchases SET status = 'completed' WHERE id = $purchase_id");
+        
+        mysqli_commit($conn);
+        $_SESSION['success'] = "Purchase completed successfully!";
+        
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        $_SESSION['error'] = "Error completing purchase: " . $e->getMessage();
     }
     
     redirect('purchases.php');
@@ -88,12 +131,22 @@ while($part = mysqli_fetch_assoc($parts_result)) {
     $parts_by_category[$cat_name][] = $part;
 }
 
-// Fetch recent purchases
+// Fetch recent purchases including drafts
 $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username 
                                   FROM purchases p 
                                   LEFT JOIN suppliers s ON p.supplier_id = s.id 
                                   LEFT JOIN users u ON p.created_by = u.id 
-                                  ORDER BY p.purchase_date DESC LIMIT 50");
+                                  ORDER BY p.purchase_date DESC, 
+                                           CASE WHEN p.status = 'draft' THEN 0 ELSE 1 END,
+                                           p.id DESC 
+                                  LIMIT 50");
+
+// Fetch draft purchases for quick access
+$drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name 
+                               FROM purchases p 
+                               LEFT JOIN suppliers s ON p.supplier_id = s.id 
+                               WHERE p.status = 'draft' 
+                               ORDER BY p.purchase_date DESC");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -141,6 +194,28 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
             padding: 10px;
             background-color: #f8f9fa;
             border-radius: 5px;
+        }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .status-draft {
+            background-color: #ffc107;
+            color: #000;
+        }
+        .status-completed {
+            background-color: #28a745;
+            color: #fff;
+        }
+        .draft-card {
+            border-left: 4px solid #ffc107;
+            margin-bottom: 10px;
+            background-color: #fff3cd;
+        }
+        .draft-card:hover {
+            background-color: #ffe69c;
         }
     </style>
     <!-- Add Select2 for better search -->
@@ -198,6 +273,48 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
             </div>
         <?php endif; ?>
 
+        <?php if (mysqli_num_rows($drafts) > 0): ?>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Draft Purchases (Pending Completion)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <?php while($draft = mysqli_fetch_assoc($drafts)): ?>
+                            <div class="col-md-4">
+                                <div class="card draft-card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <span class="badge bg-warning text-dark">Draft</span>
+                                            Invoice: <?php echo htmlspecialchars($draft['invoice_number']); ?>
+                                        </h6>
+                                        <p class="card-text">
+                                            <small>
+                                                Supplier: <?php echo htmlspecialchars($draft['supplier_name']); ?><br>
+                                                Date: <?php echo date('d-m-Y', strtotime($draft['purchase_date'])); ?><br>
+                                                Amount: ₹<?php echo number_format($draft['total_amount'], 2); ?>
+                                            </small>
+                                        </p>
+                                        <a href="purchase_edit.php?id=<?php echo $draft['id']; ?>" class="btn btn-sm btn-warning">
+                                            <i class="bi bi-pencil"></i> Continue Draft
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-success" 
+                                                onclick="completePurchase(<?php echo $draft['id']; ?>, '<?php echo htmlspecialchars($draft['invoice_number']); ?>')">
+                                            <i class="bi bi-check-circle"></i> Complete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endwhile; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="row">
             <div class="col-12">
                 <div class="card">
@@ -231,9 +348,6 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Category-wise Part Selection Section -->
-                            
                             
                             <div class="table-responsive">
                                 <table class="table table-bordered" id="itemsTable">
@@ -290,7 +404,10 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
                                 <i class="bi bi-plus-circle"></i> Add Another Item
                             </button>
                             <button type="submit" name="add_purchase" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Save Purchase
+                                <i class="bi bi-save"></i> Save & Complete
+                            </button>
+                            <button type="submit" name="add_purchase" value="draft" class="btn btn-warning" id="saveDraft">
+                                <i class="bi bi-pencil-square"></i> Save as Draft
                             </button>
                             <button type="reset" class="btn btn-secondary">
                                 <i class="bi bi-arrow-counterclockwise"></i> Reset
@@ -316,6 +433,7 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
                                         <th>Invoice #</th>
                                         <th>Supplier</th>
                                         <th>Total Amount</th>
+                                        <th>Status</th>
                                         <th>Created By</th>
                                         <th>Actions</th>
                                     </tr>
@@ -327,11 +445,28 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
                                         <td><strong><?php echo htmlspecialchars($purchase['invoice_number']); ?></strong></td>
                                         <td><?php echo htmlspecialchars($purchase['supplier_name']); ?></td>
                                         <td>₹<?php echo number_format($purchase['total_amount'], 2); ?></td>
+                                        <td>
+                                            <?php if($purchase['status'] == 'draft'): ?>
+                                                <span class="status-badge status-draft">Draft</span>
+                                            <?php else: ?>
+                                                <span class="status-badge status-completed">Completed</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?php echo htmlspecialchars($purchase['username']); ?></td>
                                         <td>
-                                            <a href="purchase_view.php?id=<?php echo $purchase['id']; ?>" class="btn btn-sm btn-info">
-                                                <i class="bi bi-eye"></i> View
-                                            </a>
+                                            <?php if($purchase['status'] == 'draft'): ?>
+                                                <a href="purchase_edit.php?id=<?php echo $purchase['id']; ?>" class="btn btn-sm btn-warning">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </a>
+                                                <button type="button" class="btn btn-sm btn-success" 
+                                                        onclick="completePurchase(<?php echo $purchase['id']; ?>, '<?php echo htmlspecialchars($purchase['invoice_number']); ?>')">
+                                                    <i class="bi bi-check-circle"></i> Complete
+                                                </button>
+                                            <?php else: ?>
+                                                <a href="purchase_view.php?id=<?php echo $purchase['id']; ?>" class="btn btn-sm btn-info">
+                                                    <i class="bi bi-eye"></i> View
+                                                </a>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                     <?php endwhile; ?>
@@ -340,6 +475,29 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Complete Purchase Modal -->
+    <div class="modal fade" id="completePurchaseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Complete Purchase</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="purchase_id" id="complete_purchase_id">
+                        <p>Are you sure you want to complete this purchase? This will update the stock quantities.</p>
+                        <p><strong>Invoice: <span id="complete_invoice"></span></strong></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="complete_purchase" class="btn btn-success">Complete Purchase</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -399,6 +557,12 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
         }
     }
 
+    function completePurchase(id, invoice) {
+        document.getElementById('complete_purchase_id').value = id;
+        document.getElementById('complete_invoice').textContent = invoice;
+        new bootstrap.Modal(document.getElementById('completePurchaseModal')).show();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize Select2 on all part selects
         $('.part-select').select2({
@@ -407,31 +571,48 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
             width: '100%'
         });
 
-        // Category filter functionality
-        $('#category_filter').on('change', function() {
-            const selectedCategory = $(this).val();
+        // Save as Draft button handler
+        document.getElementById('saveDraft').addEventListener('click', function(e) {
+            e.preventDefault();
             
-            $('.category-select').each(function() {
-                if (selectedCategory === 'all') {
-                    $(this).val('').trigger('change');
-                } else {
-                    $(this).val(selectedCategory).trigger('change');
-                }
+            // Remove required attributes for draft save
+            document.querySelectorAll('.part-select, .quantity, .purchase-price, .selling-price').forEach(field => {
+                field.required = false;
             });
+            
+            // Create hidden input to indicate draft
+            const draftInput = document.createElement('input');
+            draftInput.type = 'hidden';
+            draftInput.name = 'save_as_draft';
+            draftInput.value = '1';
+            document.getElementById('purchaseForm').appendChild(draftInput);
+            
+            // Submit form
+            document.getElementById('purchaseForm').submit();
         });
 
-        // Search input functionality
-        $('#part_search').on('keyup', function() {
-            const searchTerm = $(this).val().toLowerCase();
-            
-            $('.part-select option').each(function() {
-                const optionText = $(this).text().toLowerCase();
-                if (optionText.includes(searchTerm) || searchTerm === '') {
-                    $(this).show();
-                } else {
-                    $(this).hide();
+        // Regular submit handler
+        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+            // Check if it's not a draft save
+            if (!e.submitter || e.submitter.id !== 'saveDraft') {
+                const rows = document.querySelectorAll('#itemsTable tbody tr');
+                let hasValidItems = false;
+                
+                rows.forEach(row => {
+                    const partSelect = row.querySelector('.part-select');
+                    const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+                    
+                    if (partSelect.value && quantity > 0) {
+                        hasValidItems = true;
+                    }
+                });
+                
+                if (!hasValidItems) {
+                    e.preventDefault();
+                    alert('Please add at least one valid item to complete the purchase');
+                    return false;
                 }
-            });
+            }
         });
 
         // Add new row
@@ -523,27 +704,6 @@ $purchases = mysqli_query($conn, "SELECT p.*, s.supplier_name, u.username
             });
             document.getElementById('grandTotal').value = '₹' + grandTotal.toFixed(2);
         }
-        
-        // Form validation before submit
-        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
-            const rows = document.querySelectorAll('#itemsTable tbody tr');
-            let hasValidItems = false;
-            
-            rows.forEach(row => {
-                const partSelect = row.querySelector('.part-select');
-                const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-                
-                if (partSelect.value && quantity > 0) {
-                    hasValidItems = true;
-                }
-            });
-            
-            if (!hasValidItems) {
-                e.preventDefault();
-                alert('Please add at least one valid item to the purchase');
-                return false;
-            }
-        });
     });
     </script>
 </body>
