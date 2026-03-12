@@ -235,7 +235,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
     }
 }
 
-// Rest of your existing code remains the same...
 // Fetch categories
 $categories = mysqli_query($conn, "SELECT * FROM categories ORDER BY category_name");
 
@@ -375,6 +374,23 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status-paid {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-partial {
+            background-color: #ffc107;
+            color: black;
+        }
+        .status-pending {
+            background-color: #dc3545;
+            color: white;
         }
     </style>
 </head>
@@ -732,7 +748,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             </div>
         </div>
 
-        <!-- Recent Sales Section -->
+        <!-- Recent Sales Section - CORRECTED -->
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card">
@@ -771,11 +787,16 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                         // Get discount amount from sales table
                                         $discount_amount = $sale['discount_amount'] ?? 0;
                                         
-                                        // Grand total is stored in total_amount (after discount)
-                                        $grand_total = $sale['total_amount'];
+                                        // IMPORTANT: Use display_total which already has discount applied
+                                        $grand_total = $sale['display_total'];
                                         
-                                        // Calculate due amount
+                                        // Calculate due amount based on discounted grand total
                                         $due_amount = $grand_total - $sale['paid_amount'];
+                                        
+                                        // Ensure due amount is not negative
+                                        if ($due_amount < 0) {
+                                            $due_amount = 0;
+                                        }
                                     ?>
                                     <tr>
                                         <td><?php echo date('d-m-Y', strtotime($sale['sale_date'])); ?></td>
@@ -802,21 +823,21 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                         <td class="text-primary"><strong>₹<?php echo number_format($grand_total, 2); ?></strong></td>
                                         <td class="text-success">₹<?php echo number_format($sale['paid_amount'], 2); ?></td>
                                         <td class="text-<?php echo $due_amount > 0 ? 'danger' : 'success'; ?>">
-                                            ₹<?php echo number_format($due_amount, 2); ?>
+                                            <strong>₹<?php echo number_format($due_amount, 2); ?></strong>
                                         </td>
                                         <td>
                                             <?php 
-                                            $status_class = 'success';
+                                            $status_class = 'paid';
                                             $status_text = 'Paid';
                                             if($due_amount > 0 && $sale['paid_amount'] > 0) {
-                                                $status_class = 'warning';
+                                                $status_class = 'partial';
                                                 $status_text = 'Partial';
                                             } elseif($due_amount == $grand_total && $grand_total > 0) {
-                                                $status_class = 'danger';
+                                                $status_class = 'pending';
                                                 $status_text = 'Pending';
                                             }
                                             ?>
-                                            <span class="badge bg-<?php echo $status_class; ?>">
+                                            <span class="status-badge status-<?php echo $status_class; ?>">
                                                 <?php echo $status_text; ?>
                                             </span>
                                         </td>
@@ -1120,6 +1141,11 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         // Add new row
         document.getElementById('addRow').addEventListener('click', function() {
             addNewRow();
+        });
+        
+        // Calculate total button
+        document.getElementById('calculateTotal').addEventListener('click', function() {
+            calculateAll();
         });
         
         // Check stock button
