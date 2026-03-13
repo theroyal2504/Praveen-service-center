@@ -18,20 +18,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
     
     try {
         // Insert purchase with status
-        $query = "INSERT INTO purchases (supplier_id, purchase_date, invoice_number, created_by, status, total_amount) 
-                  VALUES ($supplier_id, '$purchase_date', '$invoice_number', $created_by, '$status', 0)";
+        $query = "INSERT INTO purchases (supplier_id, purchase_date, invoice_number, created_by, status, total_amount, operational_total) 
+                  VALUES ($supplier_id, '$purchase_date', '$invoice_number', $created_by, '$status', 0, 0)";
         mysqli_query($conn, $query);
         $purchase_id = mysqli_insert_id($conn);
         
-        // Check if there are items to insert
+        $total_amount = 0;
+        $operational_total = 0;
+        
+        // Check if there are items to insert (purchase items for selling)
         if (isset($_POST['part_id']) && is_array($_POST['part_id'])) {
             $part_ids = $_POST['part_id'];
             $quantities = $_POST['quantity'];
             $purchase_prices = $_POST['purchase_price'];
             $selling_prices = $_POST['selling_price'];
-            
-            $total_amount = 0;
-            $has_items = false;
             
             for ($i = 0; $i < count($part_ids); $i++) {
                 if (!empty($part_ids[$i]) && !empty($quantities[$i]) && $quantities[$i] > 0) {
@@ -45,7 +45,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
                     mysqli_query($conn, $item_query);
                     
                     $total_amount += $quantity * $purchase_price;
-                    $has_items = true;
                     
                     // Update stock only if status is completed
                     if ($status == 'completed') {
@@ -54,10 +53,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
                     }
                 }
             }
-            
-            // Update total amount in purchase
-            mysqli_query($conn, "UPDATE purchases SET total_amount = $total_amount WHERE id = $purchase_id");
         }
+        
+        // Handle operational expenses (business use items - not for selling)
+        if (isset($_POST['expense_description']) && is_array($_POST['expense_description'])) {
+            $expense_descriptions = $_POST['expense_description'];
+            $expense_quantities = $_POST['expense_quantity'];
+            $expense_prices = $_POST['expense_price'];
+            $expense_categories = $_POST['expense_category'];
+            
+            for ($i = 0; $i < count($expense_descriptions); $i++) {
+                if (!empty($expense_descriptions[$i]) && !empty($expense_quantities[$i]) && $expense_quantities[$i] > 0) {
+                    $description = mysqli_real_escape_string($conn, $expense_descriptions[$i]);
+                    $category = mysqli_real_escape_string($conn, $expense_categories[$i]);
+                    $quantity = $expense_quantities[$i];
+                    $price = $expense_prices[$i];
+                    $expense_total = $quantity * $price;
+                    
+                    // Insert into operational_expenses table
+                    $expense_query = "INSERT INTO operational_expenses 
+                                     (purchase_id, category, description, quantity, unit_price, total_amount, created_by, expense_date) 
+                                     VALUES 
+                                     ($purchase_id, '$category', '$description', $quantity, $price, $expense_total, $created_by, '$purchase_date')";
+                    mysqli_query($conn, $expense_query);
+                    
+                    $operational_total += $expense_total;
+                }
+            }
+        }
+        
+        // Update total amounts in purchase
+        mysqli_query($conn, "UPDATE purchases SET total_amount = $total_amount, operational_total = $operational_total WHERE id = $purchase_id");
         
         mysqli_commit($conn);
         
@@ -178,6 +204,12 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         .item-row:hover {
             background-color: #f5f5f5;
         }
+        .expense-row {
+            background-color: #f8f9fa;
+        }
+        .expense-row:hover {
+            background-color: #e9ecef;
+        }
         optgroup {
             font-weight: bold;
             color: #495057;
@@ -216,6 +248,82 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         }
         .draft-card:hover {
             background-color: #ffe69c;
+        }
+        .operational-total {
+            background-color: #e7f3ff !important;
+            font-weight: bold;
+        }
+        .expense-category-select {
+            border-left: 3px solid #6c757d;
+            margin-bottom: 5px;
+        }
+        .summary-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        
+        /* Small form controls for operational expenses */
+        .form-control-sm {
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+            height: 31px;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .table-sm th,
+        .table-sm td {
+            padding: 0.3rem;
+        }
+        
+        .table-sm input[type="text"],
+        .table-sm input[type="number"],
+        .table-sm select {
+            font-size: 0.85rem;
+        }
+        
+        .expense-row .form-control-sm {
+            height: 30px;
+        }
+        
+        .alert.py-1 {
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
+        }
+        
+        .card-header.py-2 {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+        
+        .card-body.py-2 {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+        
+        .text-white-50 {
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+        
+        .table.mb-2 {
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .btn-sm.py-0 {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        .btn-sm.px-1 {
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+        }
+        
+        .table-borderless td {
+            border: none;
         }
     </style>
     <!-- Add Select2 for better search -->
@@ -294,7 +402,8 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                                             <small>
                                                 Supplier: <?php echo htmlspecialchars($draft['supplier_name']); ?><br>
                                                 Date: <?php echo date('d-m-Y', strtotime($draft['purchase_date'])); ?><br>
-                                                Amount: ₹<?php echo number_format($draft['total_amount'], 2); ?>
+                                                Stock Items: ₹<?php echo number_format($draft['total_amount'], 2); ?><br>
+                                                Operational: ₹<?php echo number_format($draft['operational_total'] ?? 0, 2); ?>
                                             </small>
                                         </p>
                                         <a href="purchase_edit.php?id=<?php echo $draft['id']; ?>" class="btn btn-sm btn-warning">
@@ -349,69 +458,190 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                                 </div>
                             </div>
                             
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="itemsTable">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th width="15%">Category</th>
-                                            <th width="25%">Part</th>
-                                            <th width="10%">Quantity</th>
-                                            <th width="15%">Purchase Price</th>
-                                            <th width="15%">Selling Price</th>
-                                            <th width="10%">Total</th>
-                                            <th width="10%">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr class="item-row">
-                                            <td>
-                                                <select class="form-control category-select" onchange="filterPartsByCategory(this)">
-                                                    <option value="">Select Category</option>
-                                                    <?php 
-                                                    mysqli_data_seek($categories, 0);
-                                                    while($cat = mysqli_fetch_assoc($categories)): 
-                                                    ?>
-                                                    <option value="<?php echo htmlspecialchars($cat['category_name']); ?>">
-                                                        <?php echo htmlspecialchars($cat['category_name']); ?>
-                                                    </option>
-                                                    <?php endwhile; ?>
-                                                    <option value="Uncategorized">Uncategorized</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select class="form-control part-select" name="part_id[]" required disabled>
-                                                    <option value="">First select category</option>
-                                                </select>
-                                            </td>
-                                            <td><input type="number" class="form-control quantity" name="quantity[]" min="1" required disabled></td>
-                                            <td><input type="number" step="0.01" class="form-control purchase-price" name="purchase_price[]" required disabled></td>
-                                            <td><input type="number" step="0.01" class="form-control selling-price" name="selling_price[]" required disabled></td>
-                                            <td><input type="text" class="form-control row-total" readonly></td>
-                                            <td><button type="button" class="btn btn-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot>
-                                        <tr class="table-info">
-                                            <td colspan="5" class="text-end"><strong>Grand Total:</strong></td>
-                                            <td><input type="text" class="form-control" id="grandTotal" readonly style="font-weight:bold;"></td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                            <!-- Stock Items Section (For Selling) -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="bi bi-box"></i> Stock Items (For Selling)</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered" id="itemsTable">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th width="15%">Category</th>
+                                                    <th width="25%">Part</th>
+                                                    <th width="10%">Quantity</th>
+                                                    <th width="15%">Purchase Price</th>
+                                                    <th width="15%">Selling Price</th>
+                                                    <th width="10%">Total</th>
+                                                    <th width="10%">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="item-row">
+                                                    <td>
+                                                        <select class="form-control category-select" onchange="filterPartsByCategory(this)">
+                                                            <option value="">Select Category</option>
+                                                            <?php 
+                                                            mysqli_data_seek($categories, 0);
+                                                            while($cat = mysqli_fetch_assoc($categories)): 
+                                                            ?>
+                                                            <option value="<?php echo htmlspecialchars($cat['category_name']); ?>">
+                                                                <?php echo htmlspecialchars($cat['category_name']); ?>
+                                                            </option>
+                                                            <?php endwhile; ?>
+                                                            <option value="Uncategorized">Uncategorized</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <select class="form-control part-select" name="part_id[]" required disabled>
+                                                            <option value="">First select category</option>
+                                                        </select>
+                                                    </td>
+                                                    <td><input type="number" class="form-control quantity" name="quantity[]" min="1" required disabled></td>
+                                                    <td><input type="number" step="0.01" class="form-control purchase-price" name="purchase_price[]" required disabled></td>
+                                                    <td><input type="number" step="0.01" class="form-control selling-price" name="selling_price[]" required disabled></td>
+                                                    <td><input type="text" class="form-control row-total" readonly></td>
+                                                    <td><button type="button" class="btn btn-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-info">
+                                                    <td colspan="5" class="text-end"><strong>Stock Items Total:</strong></td>
+                                                    <td><input type="text" class="form-control" id="grandTotal" readonly style="font-weight:bold;"></td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-success" id="addRow">
+                                        <i class="bi bi-plus-circle"></i> Add Another Stock Item
+                                    </button>
+                                </div>
                             </div>
                             
-                            <button type="button" class="btn btn-success" id="addRow">
-                                <i class="bi bi-plus-circle"></i> Add Another Item
-                            </button>
-                            <button type="submit" name="add_purchase" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Save & Complete
-                            </button>
-                            <button type="submit" name="add_purchase" value="draft" class="btn btn-warning" id="saveDraft">
-                                <i class="bi bi-pencil-square"></i> Save as Draft
-                            </button>
-                            <button type="reset" class="btn btn-secondary">
-                                <i class="bi bi-arrow-counterclockwise"></i> Reset
-                            </button>
+                            <!-- Operational Expenses Section (Business Use Only - Not for Selling) -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-secondary text-white py-2">
+                                    <h6 class="mb-0"><i class="bi bi-briefcase"></i> Operational Expenses <small class="text-white-50">(Business Use Only - Not for Selling)</small></h6>
+                                </div>
+                                <div class="card-body py-2">
+                                    <div class="alert alert-secondary py-1 mb-2">
+                                        <small><i class="bi bi-info-circle"></i> These items are for business use only (stationery, cleaning supplies, staff refreshment, etc.). They won't be sold and won't affect loss calculations.</small>
+                                    </div>
+                                    
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-sm mb-2" id="expenseItemsTable">
+                                            <thead class="table-secondary">
+                                                <tr>
+                                                    <th width="20%"><small>Category</small></th>
+                                                    <th width="30%"><small>Item Description</small></th>
+                                                    <th width="10%"><small>Qty</small></th>
+                                                    <th width="15%"><small>Unit Price (₹)</small></th>
+                                                    <th width="15%"><small>Total</small></th>
+                                                    <th width="10%"><small>Action</small></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="expense-row">
+                                                    <td>
+                                                        <select class="form-control form-control-sm expense-category-select" name="expense_category[]" onchange="handleExpenseCategory(this)">
+                                                            <option value="">Select</option>
+                                                            <option value="Stationery">📝 Stationery</option>
+                                                            <option value="Cleaning">🧹 Cleaning</option>
+                                                            <option value="Refreshment">☕ Refreshment</option>
+                                                            <option value="Petty Cash">💰 Petty Cash</option>
+                                                            <option value="Maintenance">🔧 Maintenance</option>
+                                                            <option value="Other">🛠️ Other</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control form-control-sm expense-description" 
+                                                               name="expense_description[]" 
+                                                               placeholder="Enter description">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" class="form-control form-control-sm expense-quantity" 
+                                                               name="expense_quantity[]" min="1" value="1">
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" step="0.01" class="form-control form-control-sm expense-price" 
+                                                               name="expense_price[]" min="0" step="0.01" value="0">
+                                                    </td>
+                                                    <td>
+                                                        <input type="text" class="form-control form-control-sm expense-row-total" readonly>
+                                                    </td>
+                                                    <td>
+                                                        <button type="button" class="btn btn-danger btn-sm remove-expense py-0 px-1">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-info">
+                                                    <td colspan="4" class="text-end"><small><strong>Operational Expenses Total:</strong></small></td>
+                                                    <td>
+                                                        <input type="text" class="form-control form-control-sm operational-total" id="expensesGrandTotal" 
+                                                               readonly style="font-weight:bold;">
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-secondary btn-sm" id="addExpenseRow">
+                                        <i class="bi bi-plus-circle"></i> Add Item
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Summary Card -->
+                            <div class="card summary-card mb-3">
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <small><strong>Purchase Summary:</strong></small>
+                                            <table class="table table-sm table-borderless mb-0">
+                                                <tr>
+                                                    <td><small>Stock Items Total:</small></td>
+                                                    <td><small><strong id="summaryStockTotal">₹0.00</strong></small></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><small>Operational Expenses:</small></td>
+                                                    <td><small><strong id="summaryExpenseTotal">₹0.00</strong></small></td>
+                                                </tr>
+                                                <tr class="table-primary">
+                                                    <td><small><strong>Grand Total:</strong></small></td>
+                                                    <td><small><strong id="summaryGrandTotal">₹0.00</strong></small></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="alert alert-info py-1 mb-0">
+                                                <small><i class="bi bi-info-circle"></i> Operational expenses are recorded separately and won't affect profit/loss calculations.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden inputs -->
+                            <input type="hidden" name="operational_expenses_total" id="operationalExpensesTotal" value="0">
+                            
+                            <div class="mt-3">
+                                <button type="submit" name="add_purchase" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Save & Complete
+                                </button>
+                                <button type="submit" name="add_purchase" value="draft" class="btn btn-warning" id="saveDraft">
+                                    <i class="bi bi-pencil-square"></i> Save as Draft
+                                </button>
+                                <button type="reset" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -432,7 +662,9 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                                         <th>Date</th>
                                         <th>Invoice #</th>
                                         <th>Supplier</th>
-                                        <th>Total Amount</th>
+                                        <th>Stock Items</th>
+                                        <th>Operational</th>
+                                        <th>Total</th>
                                         <th>Status</th>
                                         <th>Created By</th>
                                         <th>Actions</th>
@@ -445,6 +677,8 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                                         <td><strong><?php echo htmlspecialchars($purchase['invoice_number']); ?></strong></td>
                                         <td><?php echo htmlspecialchars($purchase['supplier_name']); ?></td>
                                         <td>₹<?php echo number_format($purchase['total_amount'], 2); ?></td>
+                                        <td>₹<?php echo number_format($purchase['operational_total'] ?? 0, 2); ?></td>
+                                        <td><strong>₹<?php echo number_format(($purchase['total_amount'] + ($purchase['operational_total'] ?? 0)), 2); ?></strong></td>
                                         <td>
                                             <?php if($purchase['status'] == 'draft'): ?>
                                                 <span class="status-badge status-draft">Draft</span>
@@ -563,6 +797,33 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         new bootstrap.Modal(document.getElementById('completePurchaseModal')).show();
     }
 
+    // Handle expense category selection
+    function handleExpenseCategory(select) {
+        const row = select.closest('.expense-row');
+        const descriptionInput = row.querySelector('.expense-description');
+        
+        const placeholders = {
+            'Stationery': 'e.g., Register, Pen, Stapler, Files',
+            'Cleaning': 'e.g., Cleaning liquid, Cloth, Broom',
+            'Refreshment': 'e.g., Tea/Coffee, Snacks, Water',
+            'Petty Cash': 'e.g., Auto fare, Tea for customer, etc.',
+            'Maintenance': 'e.g., Tool repair, Equipment maintenance',
+            'Other': 'Enter specific description'
+        };
+        
+        descriptionInput.placeholder = placeholders[select.value] || 'Enter item description';
+    }
+
+    // Calculate summary totals
+    function updateSummaryTotals() {
+        const stockTotal = parseFloat(document.getElementById('grandTotal').value.replace('₹', '')) || 0;
+        const expenseTotal = parseFloat(document.getElementById('expensesGrandTotal').value.replace('₹', '')) || 0;
+        
+        document.getElementById('summaryStockTotal').textContent = '₹' + stockTotal.toFixed(2);
+        document.getElementById('summaryExpenseTotal').textContent = '₹' + expenseTotal.toFixed(2);
+        document.getElementById('summaryGrandTotal').textContent = '₹' + (stockTotal + expenseTotal).toFixed(2);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize Select2 on all part selects
         $('.part-select').select2({
@@ -608,14 +869,28 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                 });
                 
                 if (!hasValidItems) {
-                    e.preventDefault();
-                    alert('Please add at least one valid item to complete the purchase');
-                    return false;
+                    const expenseRows = document.querySelectorAll('#expenseItemsTable tbody tr');
+                    let hasValidExpenses = false;
+                    
+                    expenseRows.forEach(row => {
+                        const desc = row.querySelector('.expense-description').value;
+                        const quantity = parseFloat(row.querySelector('.expense-quantity').value) || 0;
+                        
+                        if (desc && quantity > 0) {
+                            hasValidExpenses = true;
+                        }
+                    });
+                    
+                    if (!hasValidItems && !hasValidExpenses) {
+                        e.preventDefault();
+                        alert('Please add at least one valid item (stock or operational) to complete the purchase');
+                        return false;
+                    }
                 }
             }
         });
 
-        // Add new row
+        // Add new stock row
         document.getElementById('addRow').addEventListener('click', function() {
             const tbody = document.querySelector('#itemsTable tbody');
             const newRow = tbody.rows[0].cloneNode(true);
@@ -646,6 +921,7 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                 if (tbody.rows.length > 1) {
                     this.closest('tr').remove();
                     calculateGrandTotal();
+                    updateSummaryTotals();
                 }
             });
             
@@ -659,13 +935,57 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
             });
         });
         
-        // Remove row
+        // Add new expense row
+        document.getElementById('addExpenseRow').addEventListener('click', function() {
+            const tbody = document.querySelector('#expenseItemsTable tbody');
+            const newRow = tbody.rows[0].cloneNode(true);
+            
+            // Clear input values
+            newRow.querySelectorAll('input').forEach(input => {
+                if (input.type !== 'button') {
+                    input.value = '';
+                }
+            });
+            
+            // Reset select
+            newRow.querySelector('.expense-category-select').selectedIndex = 0;
+            
+            // Set default quantity to 1
+            newRow.querySelector('.expense-quantity').value = '1';
+            
+            // Add remove button event
+            const removeBtn = newRow.querySelector('.remove-expense');
+            removeBtn.addEventListener('click', function() {
+                if (tbody.rows.length > 1) {
+                    this.closest('tr').remove();
+                    calculateExpensesGrandTotal();
+                    updateSummaryTotals();
+                }
+            });
+            
+            tbody.appendChild(newRow);
+        });
+        
+        // Remove stock row
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('remove-row') || e.target.closest('.remove-row')) {
                 const tbody = document.querySelector('#itemsTable tbody');
                 if (tbody.rows.length > 1) {
                     e.target.closest('tr').remove();
                     calculateGrandTotal();
+                    updateSummaryTotals();
+                }
+            }
+        });
+        
+        // Remove expense row
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-expense') || e.target.closest('.remove-expense')) {
+                const tbody = document.querySelector('#expenseItemsTable tbody');
+                if (tbody.rows.length > 1) {
+                    e.target.closest('tr').remove();
+                    calculateExpensesGrandTotal();
+                    updateSummaryTotals();
                 }
             }
         });
@@ -685,7 +1005,7 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
             }
         });
         
-        // Calculate row total on quantity or purchase price change
+        // Calculate stock row total
         document.addEventListener('input', function(e) {
             if (e.target.classList.contains('quantity') || e.target.classList.contains('purchase-price')) {
                 const row = e.target.closest('tr');
@@ -694,6 +1014,20 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                 const total = quantity * price;
                 row.querySelector('.row-total').value = total.toFixed(2);
                 calculateGrandTotal();
+                updateSummaryTotals();
+            }
+        });
+        
+        // Calculate expense row total
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('expense-quantity') || e.target.classList.contains('expense-price')) {
+                const row = e.target.closest('.expense-row');
+                const quantity = parseFloat(row.querySelector('.expense-quantity').value) || 0;
+                const price = parseFloat(row.querySelector('.expense-price').value) || 0;
+                const total = quantity * price;
+                row.querySelector('.expense-row-total').value = '₹' + total.toFixed(2);
+                calculateExpensesGrandTotal();
+                updateSummaryTotals();
             }
         });
         
@@ -703,6 +1037,16 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                 grandTotal += parseFloat(input.value) || 0;
             });
             document.getElementById('grandTotal').value = '₹' + grandTotal.toFixed(2);
+        }
+        
+        function calculateExpensesGrandTotal() {
+            let grandTotal = 0;
+            document.querySelectorAll('.expense-row-total').forEach(input => {
+                const value = parseFloat(input.value.replace('₹', '')) || 0;
+                grandTotal += value;
+            });
+            document.getElementById('expensesGrandTotal').value = '₹' + grandTotal.toFixed(2);
+            document.getElementById('operationalExpensesTotal').value = grandTotal.toFixed(2);
         }
     });
     </script>

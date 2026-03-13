@@ -589,13 +589,13 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                                         <div class="col-md-4">
                                                             <div class="mb-2">
                                                                 <label for="new_customer_name" class="form-label">Customer Name *</label>
-                                                                <input type="text" class="form-control form-control-sm" id="new_customer_name" name="new_customer_name" required>
+                                                                <input type="text" class="form-control form-control-sm" id="new_customer_name" name="new_customer_name">
                                                             </div>
                                                         </div>
                                                         <div class="col-md-3">
                                                             <div class="mb-2">
                                                                 <label for="new_customer_phone" class="form-label">Phone Number *</label>
-                                                                <input type="text" class="form-control form-control-sm" id="new_customer_phone" name="new_customer_phone" required>
+                                                                <input type="text" class="form-control form-control-sm" id="new_customer_phone" name="new_customer_phone">
                                                             </div>
                                                         </div>
                                                         <div class="col-md-3">
@@ -606,7 +606,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                                                                 </label>
                                                                 <input type="text" class="form-control form-control-sm required-field" 
                                                                        id="new_vehicle_registration" name="new_vehicle_registration" 
-                                                                       placeholder="e.g., MH12AB1234" style="text-transform:uppercase" required>
+                                                                       placeholder="e.g., MH12AB1234" style="text-transform:uppercase">
                                                                 <small class="text-danger-small">Vehicle number is mandatory</small>
                                                             </div>
                                                         </div>
@@ -913,6 +913,8 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         </div>
     </div>
 </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     // Parts data
     var partsByCategory = <?php echo json_encode($parts_map); ?> || {};
@@ -920,6 +922,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
     // Draft data
     var draftData = <?php echo json_encode($draft_data); ?>;
 
+    // Define all functions in global scope
     function loadCustomerVehicle() {
         const select = document.getElementById('customer_id');
         const selected = select.options[select.selectedIndex];
@@ -927,11 +930,11 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         const vehicleInfo = document.getElementById('customerVehicleInfo');
         const vehicleDetails = document.getElementById('customerVehicleDetails');
         
-        if (selected.value && selected.dataset.vehicle) {
+        if (selected && selected.value && selected.dataset.vehicle) {
             vehicleInput.value = selected.dataset.vehicle;
             vehicleInfo.style.display = 'block';
             vehicleDetails.innerHTML = 'Vehicle: ' + selected.dataset.vehicle + ' for ' + selected.dataset.name;
-        } else if (selected.value) {
+        } else if (selected && selected.value) {
             vehicleInput.value = '';
             vehicleInfo.style.display = 'none';
         } else {
@@ -944,10 +947,12 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         vehicleInput.required = true;
         vehicleInput.setCustomValidity('');
         
-        if (selected.value) {
+        if (selected && selected.value) {
             document.getElementById('new_customer_name').value = selected.dataset.name || '';
             document.getElementById('new_customer_phone').value = selected.dataset.phone || '';
         }
+        
+        checkVehicleNumber();
     }
 
     function checkStockAvailability() {
@@ -979,10 +984,13 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         const vehicleWarning = document.getElementById('vehicleWarning');
         let vehicleNumber = '';
         
-        if (activeTab.id === 'existing-customer') {
+        if (activeTab && activeTab.id === 'existing-customer') {
             vehicleNumber = document.getElementById('existing_vehicle').value.trim();
-        } else {
+        } else if (activeTab && activeTab.id === 'new-customer') {
             vehicleNumber = document.getElementById('new_vehicle_registration').value.trim();
+        } else {
+            // Default to existing customer tab
+            vehicleNumber = document.getElementById('existing_vehicle').value.trim();
         }
         
         if (!vehicleNumber) {
@@ -994,73 +1002,79 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         }
     }
 
-    function loadDraftData() {
-        if (!draftData) return;
+    function calculateAll() {
+        const paidAmountInput = document.getElementById('paid_amount');
+        const subTotalInput = document.getElementById('subTotal');
+        const grandTotalInput = document.getElementById('grandTotal');
+        const displayPaidAmount = document.getElementById('displayPaidAmount');
+        const dueAmountInput = document.getElementById('dueAmount');
+        const discountType = document.getElementById('discount_type');
+        const discountValue = document.getElementById('discount_value');
+        const discountDisplay = document.getElementById('discount_display');
+
+        // Calculate subtotal from items
+        let subTotal = 0;
+        document.querySelectorAll('.row-total').forEach(input => {
+            subTotal += parseFloat(input.value) || 0;
+        });
+        subTotalInput.value = subTotal.toFixed(2);
         
-        // Load customer data
-        if (draftData.customer_id) {
-            document.getElementById('customer_id').value = draftData.customer_id;
-            loadCustomerVehicle();
-        }
+        // Calculate discount
+        let discount = 0;
+        let discountVal = parseFloat(discountValue.value) || 0;
         
-        // Load vehicle registration
-        if (draftData.vehicle_registration) {
-            document.getElementById('existing_vehicle').value = draftData.vehicle_registration;
-        }
-        
-        // Load date
-        if (draftData.sale_date) {
-            document.getElementById('sale_date').value = draftData.sale_date;
-        }
-        
-        // Load payment method
-        if (draftData.payment_method) {
-            document.getElementById('payment_method').value = draftData.payment_method;
-        }
-        
-        // Load paid amount
-        if (draftData.paid_amount) {
-            document.getElementById('paid_amount').value = draftData.paid_amount;
+        if (discountType.value === 'percentage') {
+            discount = (subTotal * discountVal) / 100;
+        } else {
+            discount = discountVal;
         }
         
-        // Load discount
-        if (draftData.discount_type) {
-            document.getElementById('discount_type').value = draftData.discount_type;
-        }
-        if (draftData.discount_value) {
-            document.getElementById('discount_value').value = draftData.discount_value;
+        // Ensure discount doesn't exceed subtotal
+        if (discount > subTotal) {
+            discount = subTotal;
+            discountValue.value = discount;
         }
         
-        // Load new customer data if any
-        if (draftData.new_customer) {
-            document.getElementById('new_customer').checked = true;
-            document.getElementById('new_customer_name').value = draftData.new_customer.name || '';
-            document.getElementById('new_customer_phone').value = draftData.new_customer.phone || '';
-            document.getElementById('new_vehicle_registration').value = draftData.new_customer.vehicle || '';
-            
-            // Switch to new customer tab
-            document.getElementById('new-customer-tab').click();
+        // Update discount display
+        if (discountType.value === 'percentage') {
+            discountDisplay.innerHTML = discountVal + '%';
+        } else {
+            discountDisplay.innerHTML = '₹' + discount.toFixed(2);
         }
         
-        // Load items
-        if (draftData.items && draftData.items.length > 0) {
-            const tbody = document.querySelector('#itemsTable tbody');
-            
-            // Remove default empty row
-            while (tbody.rows.length > 0) {
-                tbody.deleteRow(0);
-            }
-            
-            // Add rows for each item
-            draftData.items.forEach((item, index) => {
-                if (index === 0) {
-                    // Modify the first row we'll add
-                    addNewRow(item);
-                } else {
-                    addNewRow(item);
-                }
-            });
+        // Calculate grand total after discount
+        let grandTotal = subTotal - discount;
+        if (grandTotal < 0) grandTotal = 0;
+        grandTotalInput.value = grandTotal.toFixed(2);
+        
+        // Update due amount based on grand total after discount
+        const paidAmount = parseFloat(paidAmountInput.value) || 0;
+        let dueAmount = grandTotal - paidAmount;
+        
+        if (dueAmount < 0) {
+            dueAmount = 0;
+            paidAmountInput.value = grandTotal.toFixed(2);
         }
+        
+        displayPaidAmount.value = paidAmount.toFixed(2);
+        dueAmountInput.value = dueAmount.toFixed(2);
+        
+        // Style due amount
+        if (dueAmount > 0) {
+            dueAmountInput.style.color = '#dc3545';
+            dueAmountInput.style.backgroundColor = '#f8d7da';
+            dueAmountInput.style.fontWeight = 'bold';
+        } else {
+            dueAmountInput.style.color = '#28a745';
+            dueAmountInput.style.backgroundColor = '#d4edda';
+            dueAmountInput.style.fontWeight = 'bold';
+        }
+        
+        // Check stock availability
+        checkStockAvailability();
+        
+        // Check vehicle number
+        checkVehicleNumber();
     }
 
     function addNewRow(itemData = null) {
@@ -1068,14 +1082,19 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         const newRow = document.createElement('tr');
         newRow.className = 'item-row';
         
+        // Get categories list from PHP
+        const categoriesList = <?php echo json_encode($categories_list); ?>;
+        
+        let categoryOptions = '<option value="">Category</option>';
+        categoriesList.forEach(cat => {
+            categoryOptions += `<option value="${cat.replace(/['"]/g, '&quot;')}">${cat}</option>`;
+        });
+        
         newRow.innerHTML = `
             <td>
                 <div class="d-flex align-items-center gap-2">
                     <select class="form-control form-control-sm category-select" style="flex:0 0 45%;">
-                        <option value="">Category</option>
-                        <?php foreach($categories_list as $cat): ?>
-                            <option value="<?php echo htmlspecialchars($cat); ?>"><?php echo htmlspecialchars($cat); ?></option>
-                        <?php endforeach; ?>
+                        ${categoryOptions}
                     </select>
                     <select class="form-control form-control-sm part-select" name="part_id[]" required disabled style="flex:1;">
                         <option value="">Select Part</option>
@@ -1136,88 +1155,88 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         }
     }
 
+    function loadDraftData() {
+        if (!draftData) return;
+        
+        // Load customer data
+        if (draftData.customer_id) {
+            document.getElementById('customer_id').value = draftData.customer_id;
+            loadCustomerVehicle();
+        }
+        
+        // Load vehicle registration
+        if (draftData.vehicle_registration) {
+            document.getElementById('existing_vehicle').value = draftData.vehicle_registration;
+        }
+        
+        // Load date
+        if (draftData.sale_date) {
+            document.getElementById('sale_date').value = draftData.sale_date;
+        }
+        
+        // Load payment method
+        if (draftData.payment_method) {
+            document.getElementById('payment_method').value = draftData.payment_method;
+        }
+        
+        // Load paid amount
+        if (draftData.paid_amount) {
+            document.getElementById('paid_amount').value = draftData.paid_amount;
+        }
+        
+        // Load discount
+        if (draftData.discount_type) {
+            document.getElementById('discount_type').value = draftData.discount_type;
+        }
+        if (draftData.discount_value) {
+            document.getElementById('discount_value').value = draftData.discount_value;
+        }
+        
+        // Load new customer data if any
+        if (draftData.new_customer) {
+            document.getElementById('new_customer').checked = true;
+            document.getElementById('new_customer_name').value = draftData.new_customer.name || '';
+            document.getElementById('new_customer_phone').value = draftData.new_customer.phone || '';
+            document.getElementById('new_vehicle_registration').value = draftData.new_customer.vehicle || '';
+            
+            // Switch to new customer tab
+            const newCustomerTab = document.getElementById('new-customer-tab');
+            if (newCustomerTab) {
+                newCustomerTab.click();
+            }
+        }
+        
+        // Load items
+        if (draftData.items && draftData.items.length > 0) {
+            const tbody = document.querySelector('#itemsTable tbody');
+            
+            // Remove default empty row
+            while (tbody.rows.length > 0) {
+                tbody.deleteRow(0);
+            }
+            
+            // Add rows for each item
+            draftData.items.forEach((item) => {
+                addNewRow(item);
+            });
+        }
+        
+        // Calculate totals after loading
+        setTimeout(calculateAll, 500);
+    }
+
+    // Initialize everything when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         const paidAmountInput = document.getElementById('paid_amount');
-        const subTotalInput = document.getElementById('subTotal');
-        const grandTotalInput = document.getElementById('grandTotal');
-        const displayPaidAmount = document.getElementById('displayPaidAmount');
-        const dueAmountInput = document.getElementById('dueAmount');
         const discountType = document.getElementById('discount_type');
         const discountValue = document.getElementById('discount_value');
-        const discountDisplay = document.getElementById('discount_display');
 
-        function calculateAll() {
-            // Calculate subtotal from items
-            let subTotal = 0;
-            document.querySelectorAll('.row-total').forEach(input => {
-                subTotal += parseFloat(input.value) || 0;
-            });
-            subTotalInput.value = subTotal.toFixed(2);
-            
-            // Calculate discount
-            let discount = 0;
-            let discountVal = parseFloat(discountValue.value) || 0;
-            
-            if (discountType.value === 'percentage') {
-                discount = (subTotal * discountVal) / 100;
-            } else {
-                discount = discountVal;
-            }
-            
-            // Ensure discount doesn't exceed subtotal
-            if (discount > subTotal) {
-                discount = subTotal;
-                discountValue.value = discount;
-            }
-            
-            // Update discount display
-            if (discountType.value === 'percentage') {
-                discountDisplay.innerHTML = discountVal + '%';
-            } else {
-                discountDisplay.innerHTML = '₹' + discount.toFixed(2);
-            }
-            
-            // Calculate grand total after discount
-            let grandTotal = subTotal - discount;
-            if (grandTotal < 0) grandTotal = 0;
-            grandTotalInput.value = grandTotal.toFixed(2);
-            
-            // Update due amount based on grand total after discount
-            const paidAmount = parseFloat(paidAmountInput.value) || 0;
-            let dueAmount = grandTotal - paidAmount;
-            
-            if (dueAmount < 0) {
-                dueAmount = 0;
-                paidAmountInput.value = grandTotal.toFixed(2);
-            }
-            
-            displayPaidAmount.value = paidAmount.toFixed(2);
-            dueAmountInput.value = dueAmount.toFixed(2);
-            
-            // Style due amount
-            if (dueAmount > 0) {
-                dueAmountInput.style.color = '#dc3545';
-                dueAmountInput.style.backgroundColor = '#f8d7da';
-                dueAmountInput.style.fontWeight = 'bold';
-            } else {
-                dueAmountInput.style.color = '#28a745';
-                dueAmountInput.style.backgroundColor = '#d4edda';
-                dueAmountInput.style.fontWeight = 'bold';
-            }
-            
-            // Check stock availability
-            checkStockAvailability();
-            
-            // Check vehicle number
-            checkVehicleNumber();
-        }
-
-        // Event listeners for discount
+        // Add event listeners
+        paidAmountInput.addEventListener('input', calculateAll);
         discountType.addEventListener('change', calculateAll);
         discountValue.addEventListener('input', calculateAll);
-        paidAmountInput.addEventListener('input', calculateAll);
 
-        // Add new row
+        // Add new row button
         document.getElementById('addRow').addEventListener('click', function() {
             addNewRow();
         });
@@ -1232,7 +1251,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             checkStockAvailability();
         });
         
-        // Remove row
+        // Remove row using event delegation
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('remove-row') || e.target.closest('.remove-row')) {
                 const tbody = document.querySelector('#itemsTable tbody');
@@ -1243,7 +1262,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             }
         });
         
-        // Category selection
+        // Category selection using event delegation
         document.addEventListener('change', function(e) {
             if (e.target.classList.contains('category-select')) {
                 const row = e.target.closest('tr');
@@ -1269,9 +1288,11 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                 row.querySelector('.selling-price').value = '';
                 row.querySelector('.quantity').value = '';
                 row.querySelector('.row-total').value = '';
+                row.querySelector('.quantity').disabled = true;
+                row.querySelector('.selling-price').disabled = true;
             }
 
-            // Part selection
+            // Part selection using event delegation
             if (e.target.classList.contains('part-select')) {
                 const selected = e.target.options[e.target.selectedIndex];
                 const row = e.target.closest('tr');
@@ -1298,7 +1319,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             }
         });
         
-        // Calculate row total
+        // Calculate row total using event delegation
         document.addEventListener('input', function(e) {
             if (e.target.classList.contains('quantity') || e.target.classList.contains('selling-price')) {
                 const row = e.target.closest('tr');
@@ -1319,8 +1340,15 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         });
 
         // Check vehicle number on input
-        document.getElementById('existing_vehicle').addEventListener('input', checkVehicleNumber);
-        document.getElementById('new_vehicle_registration').addEventListener('input', checkVehicleNumber);
+        const existingVehicle = document.getElementById('existing_vehicle');
+        const newVehicle = document.getElementById('new_vehicle_registration');
+        
+        if (existingVehicle) {
+            existingVehicle.addEventListener('input', checkVehicleNumber);
+        }
+        if (newVehicle) {
+            newVehicle.addEventListener('input', checkVehicleNumber);
+        }
         
         // Handle tab switching
         const tabs = document.querySelectorAll('a[data-bs-toggle="tab"]');
@@ -1333,11 +1361,11 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                 if (e.target.id === 'existing-customer-tab') {
                     existingVehicle.required = true;
                     newVehicle.required = false;
-                    newVehicle.value = ''; // Clear new vehicle when switching
+                    if (newVehicle) newVehicle.value = ''; // Clear new vehicle when switching
                 } else {
                     existingVehicle.required = false;
                     newVehicle.required = true;
-                    existingVehicle.value = ''; // Clear existing vehicle when switching
+                    if (existingVehicle) existingVehicle.value = ''; // Clear existing vehicle when switching
                 }
                 checkVehicleNumber();
             });
@@ -1346,13 +1374,14 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         // Form validation
         document.getElementById('saleForm').addEventListener('submit', function(e) {
             // Check if this is a draft save or complete sale
-            const isDraftSave = e.submitter && e.submitter.name === 'save_draft';
+            const submitter = e.submitter;
+            const isDraftSave = submitter && submitter.name === 'save_draft';
             
             // ALWAYS check vehicle registration for both draft and complete sale
             const activeTab = document.querySelector('.tab-pane.active');
             let vehicleNumber = '';
             
-            if (activeTab.id === 'existing-customer') {
+            if (activeTab && activeTab.id === 'existing-customer') {
                 vehicleNumber = document.getElementById('existing_vehicle').value.trim();
             } else {
                 vehicleNumber = document.getElementById('new_vehicle_registration').value.trim();
@@ -1363,7 +1392,7 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                 alert('⚠️ VEHICLE NUMBER IS MANDATORY!\n\nPlease enter the vehicle registration number for this sale.');
                 
                 // Focus on the appropriate vehicle input
-                if (activeTab.id === 'existing-customer') {
+                if (activeTab && activeTab.id === 'existing-customer') {
                     document.getElementById('existing_vehicle').focus();
                 } else {
                     document.getElementById('new_vehicle_registration').focus();
@@ -1405,6 +1434,8 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                     return false;
                 }
                 
+                const grandTotalInput = document.getElementById('grandTotal');
+                const paidAmountInput = document.getElementById('paid_amount');
                 const grandTotal = parseFloat(grandTotalInput.value) || 0;
                 const paidAmount = parseFloat(paidAmountInput.value) || 0;
                 
@@ -1459,7 +1490,5 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
         }
     });
     </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
