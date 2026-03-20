@@ -11,6 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
     $purchase_date = $_POST['purchase_date'];
     $invoice_number = mysqli_real_escape_string($conn, $_POST['invoice_number']);
     $created_by = $_SESSION['user_id'];
+    
+    // Check if it's a draft or completed purchase
     $status = isset($_POST['save_as_draft']) ? 'draft' : 'completed';
     
     // Start transaction
@@ -48,7 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
                     
                     // Update stock only if status is completed
                     if ($status == 'completed') {
-                        $stock_query = "UPDATE stock SET quantity = quantity + $quantity WHERE part_id = $part_id";
+                        // Check if stock record exists
+                        $check_stock = mysqli_query($conn, "SELECT id FROM stock WHERE part_id = $part_id");
+                        if (mysqli_num_rows($check_stock) > 0) {
+                            $stock_query = "UPDATE stock SET quantity = quantity + $quantity WHERE part_id = $part_id";
+                        } else {
+                            $stock_query = "INSERT INTO stock (part_id, quantity) VALUES ($part_id, $quantity)";
+                        }
                         mysqli_query($conn, $stock_query);
                     }
                 }
@@ -83,7 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_purchase'])) {
         }
         
         // Update total amounts in purchase
-        mysqli_query($conn, "UPDATE purchases SET total_amount = $total_amount, operational_total = $operational_total WHERE id = $purchase_id");
+        $update_query = "UPDATE purchases SET total_amount = $total_amount, operational_total = $operational_total WHERE id = $purchase_id";
+        mysqli_query($conn, $update_query);
         
         mysqli_commit($conn);
         
@@ -114,7 +123,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['complete_purchase'])) 
         
         // Update stock for each item
         while ($item = mysqli_fetch_assoc($items_result)) {
-            $stock_query = "UPDATE stock SET quantity = quantity + {$item['quantity']} WHERE part_id = {$item['part_id']}";
+            // Check if stock record exists
+            $check_stock = mysqli_query($conn, "SELECT id FROM stock WHERE part_id = {$item['part_id']}");
+            if (mysqli_num_rows($check_stock) > 0) {
+                $stock_query = "UPDATE stock SET quantity = quantity + {$item['quantity']} WHERE part_id = {$item['part_id']}";
+            } else {
+                $stock_query = "INSERT INTO stock (part_id, quantity) VALUES ({$item['part_id']}, {$item['quantity']})";
+            }
             mysqli_query($conn, $stock_query);
         }
         
@@ -210,23 +225,6 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         .expense-row:hover {
             background-color: #e9ecef;
         }
-        optgroup {
-            font-weight: bold;
-            color: #495057;
-            background-color: #e9ecef;
-            font-size: 1.1em;
-        }
-        optgroup option {
-            padding-left: 20px;
-            font-weight: normal;
-            color: #212529;
-        }
-        .category-filter {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-        }
         .status-badge {
             padding: 3px 8px;
             border-radius: 4px;
@@ -249,81 +247,21 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         .draft-card:hover {
             background-color: #ffe69c;
         }
-        .operational-total {
-            background-color: #e7f3ff !important;
-            font-weight: bold;
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
         }
-        .expense-category-select {
-            border-left: 3px solid #6c757d;
-            margin-bottom: 5px;
+        .btn-draft {
+            background-color: #ffc107;
+            border-color: #ffc107;
+            color: #000;
         }
-        .summary-card {
-            background-color: #f8f9fa;
-            border-left: 4px solid #007bff;
-        }
-        
-        /* Small form controls for operational expenses */
-        .form-control-sm {
-            font-size: 0.875rem;
-            padding: 0.25rem 0.5rem;
-            height: 31px;
-        }
-        
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-        }
-        
-        .table-sm th,
-        .table-sm td {
-            padding: 0.3rem;
-        }
-        
-        .table-sm input[type="text"],
-        .table-sm input[type="number"],
-        .table-sm select {
-            font-size: 0.85rem;
-        }
-        
-        .expense-row .form-control-sm {
-            height: 30px;
-        }
-        
-        .alert.py-1 {
-            padding-top: 0.25rem !important;
-            padding-bottom: 0.25rem !important;
-        }
-        
-        .card-header.py-2 {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-        }
-        
-        .card-body.py-2 {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-        }
-        
-        .text-white-50 {
-            color: rgba(255, 255, 255, 0.7) !important;
-        }
-        
-        .table.mb-2 {
-            margin-bottom: 0.5rem !important;
-        }
-        
-        .btn-sm.py-0 {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-        }
-        
-        .btn-sm.px-1 {
-            padding-left: 0.25rem !important;
-            padding-right: 0.25rem !important;
-        }
-        
-        .table-borderless td {
-            border: none;
+        .btn-draft:hover {
+            background-color: #e0a800;
+            border-color: #d39e00;
+            color: #000;
         }
     </style>
     <!-- Add Select2 for better search -->
@@ -635,7 +573,7 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
                                 <button type="submit" name="add_purchase" class="btn btn-primary">
                                     <i class="bi bi-save"></i> Save & Complete
                                 </button>
-                                <button type="submit" name="add_purchase" value="draft" class="btn btn-warning" id="saveDraft">
+                                <button type="button" class="btn btn-warning" id="saveDraftBtn">
                                     <i class="bi bi-pencil-square"></i> Save as Draft
                                 </button>
                                 <button type="reset" class="btn btn-secondary">
@@ -833,61 +771,25 @@ $drafts = mysqli_query($conn, "SELECT p.*, s.supplier_name
         });
 
         // Save as Draft button handler
-        document.getElementById('saveDraft').addEventListener('click', function(e) {
+        document.getElementById('saveDraftBtn').addEventListener('click', function(e) {
             e.preventDefault();
             
-            // Remove required attributes for draft save
-            document.querySelectorAll('.part-select, .quantity, .purchase-price, .selling-price').forEach(field => {
-                field.required = false;
-            });
-            
-            // Create hidden input to indicate draft
+            // Create a hidden input for draft
             const draftInput = document.createElement('input');
             draftInput.type = 'hidden';
             draftInput.name = 'save_as_draft';
             draftInput.value = '1';
+            
+            // Add it to the form
             document.getElementById('purchaseForm').appendChild(draftInput);
             
-            // Submit form
+            // Temporarily remove required attributes
+            document.querySelectorAll('[required]').forEach(field => {
+                field.removeAttribute('required');
+            });
+            
+            // Submit the form
             document.getElementById('purchaseForm').submit();
-        });
-
-        // Regular submit handler
-        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
-            // Check if it's not a draft save
-            if (!e.submitter || e.submitter.id !== 'saveDraft') {
-                const rows = document.querySelectorAll('#itemsTable tbody tr');
-                let hasValidItems = false;
-                
-                rows.forEach(row => {
-                    const partSelect = row.querySelector('.part-select');
-                    const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
-                    
-                    if (partSelect.value && quantity > 0) {
-                        hasValidItems = true;
-                    }
-                });
-                
-                if (!hasValidItems) {
-                    const expenseRows = document.querySelectorAll('#expenseItemsTable tbody tr');
-                    let hasValidExpenses = false;
-                    
-                    expenseRows.forEach(row => {
-                        const desc = row.querySelector('.expense-description').value;
-                        const quantity = parseFloat(row.querySelector('.expense-quantity').value) || 0;
-                        
-                        if (desc && quantity > 0) {
-                            hasValidExpenses = true;
-                        }
-                    });
-                    
-                    if (!hasValidItems && !hasValidExpenses) {
-                        e.preventDefault();
-                        alert('Please add at least one valid item (stock or operational) to complete the purchase');
-                        return false;
-                    }
-                }
-            }
         });
 
         // Add new stock row

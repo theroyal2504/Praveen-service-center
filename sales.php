@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
                     // Get part name for better error message
                     $part_query = mysqli_query($conn, "SELECT part_name FROM parts_master WHERE id = $part_id");
                     $part_data = mysqli_fetch_assoc($part_query);
-                    $out_of_stock_items[] = $part_data['part_name'] . " (Available: " . $stock['quantity'] . ", Requested: " . $quantity . ")";
+                    $out_of_stock_items[] = $part_data['part_name'] . " (Available: " . ($stock['quantity'] ?? 0) . ", Requested: " . $quantity . ")";
                 }
             }
         }
@@ -240,10 +240,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_sale'])) {
 // Fetch categories
 $categories = mysqli_query($conn, "SELECT * FROM categories ORDER BY category_name");
 
-// Fetch parts with category information and latest selling price
+// FIXED: Fetch ALL parts with category information and latest selling price
+// Removed the quantity > 0 condition to show all parts
 $parts_query = "SELECT 
                     p.*, 
-                    s.quantity as current_stock, 
+                    COALESCE(s.quantity, 0) as current_stock, 
                     c.category_name, 
                     c.id as category_id,
                     (
@@ -254,9 +255,8 @@ $parts_query = "SELECT
                         LIMIT 1
                     ) as latest_selling_price
                 FROM parts_master p 
-                JOIN stock s ON p.id = s.part_id 
+                LEFT JOIN stock s ON p.id = s.part_id 
                 LEFT JOIN categories c ON p.category_id = c.id
-                WHERE s.quantity > 0 
                 ORDER BY c.category_name, p.part_name";
 $parts = mysqli_query($conn, $parts_query);
 
@@ -288,7 +288,7 @@ while($p = mysqli_fetch_assoc($parts)) {
     if (!isset($parts_map[$cat])) {
         $parts_map[$cat] = [];
     }
-    // Use latest selling price if available
+    // Use latest selling price if available, otherwise use unit price
     $p['selling_price'] = $p['latest_selling_price'] ?? $p['unit_price'];
     $parts_map[$cat][] = $p;
     if (!in_array($cat, $categories_list)) {
@@ -419,6 +419,30 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
             padding: 5px;
             border-radius: 4px;
             margin-top: 5px;
+        }
+        /* New styles for out of stock items */
+        .out-of-stock-option {
+            color: #999;
+            font-style: italic;
+        }
+        .out-of-stock-option::after {
+            content: " ⚠️";
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+        .stock-indicator {
+            font-size: 0.8em;
+            margin-left: 5px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .stock-in {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .stock-out {
+            background-color: #f8d7da;
+            color: #721c24;
         }
     </style>
 </head>
@@ -1276,9 +1300,17 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                     partsByCategory[cat].forEach(p => {
                         const opt = document.createElement('option');
                         opt.value = p.id;
+                        
+                        // SHOW ONLY PART NAME - NO STOCK INFORMATION IN TEXT
                         opt.textContent = p.part_name;
+                        
+                        // Style out-of-stock items differently (visual cue only)
+                        if (p.current_stock <= 0) {
+                            opt.classList.add('out-of-stock-option');
+                        }
+                        
                         opt.dataset.price = p.selling_price || p.unit_price;
-                        opt.dataset.stock = p.current_stock;
+                        opt.dataset.stock = p.current_stock || 0;
                         partSelect.appendChild(opt);
                     });
                     partSelect.disabled = false;
@@ -1309,6 +1341,13 @@ $draft_data = isset($_SESSION['sale_draft']) ? $_SESSION['sale_draft'] : null;
                     const quantityInput = row.querySelector('.quantity');
                     quantityInput.max = stock;
                     quantityInput.setAttribute('max', stock);
+                    
+                    // If stock is 0, disable quantity input
+                    if (stock <= 0) {
+                        quantityInput.disabled = true;
+                        quantityInput.value = '';
+                        alert('This item is out of stock. Please purchase stock first.');
+                    }
                 } else {
                     row.querySelector('.available-stock').value = '';
                     row.querySelector('.selling-price').value = '';

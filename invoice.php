@@ -8,12 +8,13 @@ if (!isLoggedIn()) {
 $sale_id = $_GET['id'] ?? 0;
 
 // Fetch sale details with customer information - Use grand_total if available
+// Modified query to include vehicle fields from both sales and customers tables
 $sale = mysqli_query($conn, "SELECT s.*, 
                                      c.customer_name, 
                                      c.phone, 
                                      c.address, 
                                      c.email,
-                                     c.vehicle_registration,
+                                     c.vehicle_registration as customer_vehicle,
                                      u.username,
                                      COALESCE(s.grand_total, s.total_amount) as invoice_total
                               FROM sales s
@@ -174,7 +175,7 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
         .vehicle-badge {
             background: #e7f3ff;
             color: #004085;
-            padding: 5px 10px;
+            padding: 2px 25px;
             border-radius: 5px;
             font-weight: bold;
             border: 1px solid #b8daff;
@@ -279,9 +280,27 @@ if ($correct_due_amount < 0) $correct_due_amount = 0;
                     <tr>
                         <td><strong>Vehicle:</strong></td>
                         <td>
-                            <?php if(!empty($sale_details['vehicle_registration'])): ?>
+                            <?php 
+                            // Check multiple possible sources for vehicle number
+                            $vehicle_number = '';
+                            
+                            // Priority 1: Direct vehicle field in sales table (if exists)
+                            if (isset($sale_details['vehicle_number']) && !empty($sale_details['vehicle_number'])) {
+                                $vehicle_number = $sale_details['vehicle_number'];
+                            }
+                            // Priority 2: Vehicle registration from customers table
+                            elseif (!empty($sale_details['customer_vehicle'])) {
+                                $vehicle_number = $sale_details['customer_vehicle'];
+                            }
+                            // Priority 3: Check if vehicle_registration exists directly
+                            elseif (isset($sale_details['vehicle_registration']) && !empty($sale_details['vehicle_registration'])) {
+                                $vehicle_number = $sale_details['vehicle_registration'];
+                            }
+                            
+                            if (!empty($vehicle_number)): 
+                            ?>
                                 <span class="vehicle-badge">
-                                    <?php echo htmlspecialchars($sale_details['vehicle_registration']); ?>
+                                    <?php echo htmlspecialchars($vehicle_number); ?>
                                 </span>
                             <?php else: ?>
                                 <span class="text-muted">N/A</span>
